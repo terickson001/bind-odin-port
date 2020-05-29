@@ -1,0 +1,52 @@
+version(1);
+project_name = "Odin Bindings Generator";
+
+patterns = {
+"*.odin",
+"*.sh",
+"*.4coder",
+"*.txt",
+"*.bind",
+};
+blacklist_patterns = {
+".*",
+};
+load_paths_custom = {
+ {"."},
+};
+load_paths = {
+ { load_paths_custom, .os = "win"  },
+ { load_paths_custom, .os = "linux"},
+ { load_paths_custom, .os = "mac"  },
+};
+
+command_list = {
+ { .name = "Run Debug",
+   .out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
+   .cmd = { {"odin run . -debug", .os ="win"},
+            {"odin run . -debug", .os ="linux"},
+            {"odin run . -debug", .os ="mac"  }, }, },
+
+ { .name = "Build Debug",
+   .out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
+   .cmd = { {"odin build . -debug", .os ="win"},
+            {"odin build . -debug", .os ="linux"},
+            {"odin build . -debug", .os ="mac"  }, }, },
+
+{ .name = "Run Release",
+   .out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
+   .cmd = { {"odin run . -opt:3", .os ="win"},
+            {"odin run . -opt:3", .os ="linux"},
+            {"odin run . -opt:3", .os ="mac"  }, }, },
+
+ { .name = "Build Release",
+   .out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
+   .cmd = { {"odin build . -opt:3", .os ="win"},
+            {"odin build . -opt:3", .os ="linux"},
+            {"odin build . -opt:3", .os ="mac"  }, }, },
+};
+
+fkey_command[1] = "Run Debug";
+fkey_command[2] = "Build Debug";
+fkey_command[3] = "Run Release";
+fkey_command[4] = "Build Release";

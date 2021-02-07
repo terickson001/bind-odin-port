@@ -1,12 +1,41 @@
 package lex
 
-import "common"
+import "../common"
+import hs "../hide_set"
+
 Token :: struct
 {
+    next: ^Token,
     kind: Token_Kind,
     text: string,
+    first_on_line: bool,
+    value: Value,
+    whitespace: int,
     
-    location: common.File_Location,
+    hide_set: ^hs.Hide_Set,
+    using location: common.File_Location,
+}
+
+Value :: struct
+{
+    size: u8,
+    base: u8,
+    sig_figs: u8,
+    unsigned: b8,
+    is_char: b8,
+    
+    val: union
+    {
+        u64,
+        f64,
+    }
+}
+
+clone_token :: proc(token: ^Token, allocator := context.allocator) -> ^Token
+{
+    ret := new_clone(token^);
+    ret.next = nil;
+    return ret;
 }
 
 Token_Kind :: enum
@@ -122,6 +151,7 @@ Token_Kind :: enum
     ___extension__,
     ___asm__,
     ___pragma,
+    __Pragma,
     ___cdecl,
     ___clrcall,
     ___stdcall,
@@ -250,6 +280,7 @@ TOKEN_STRINGS :: [?]string{
     "__extension__",
     "__asm__",
     "__pragma",
+    "__Pragma",
     "__cdecl",
     "__clrcall",
     "__stdcall",

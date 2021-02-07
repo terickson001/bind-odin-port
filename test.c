@@ -1,4 +1,4 @@
-#define foo(...) a, ##__VA_ARGS__
+#include_next "test.h"
 
 int main(void)
 {

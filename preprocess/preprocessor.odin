@@ -28,6 +28,7 @@ Preprocessor :: struct
     macros: map[string]Macro,
     pragma_onces: map[string]b32,
     conditionals: ^Conditional,
+    counter: u64,
     
     using opt: Options,
 }
@@ -50,7 +51,6 @@ Macro :: struct
     name: ^Token,
     body: ^Token,
     params: ^Macro_Param,
-    // params: ^Token,
 }
 
 Conditional :: struct
@@ -153,8 +153,50 @@ read_macro_args :: proc(using pp: ^Preprocessor, macro: Macro) -> ^Macro_Arg
     return head.next;
 }
 
+try_special_macro :: proc(using pp: ^Preprocessor) -> bool
+{
+    res: ^Token;
+    switch tokens.text
+    {
+        case "__FILE__":
+        t := tokens;
+        tokens = tokens.next;
+        for t.from != nil do t = t.from;
+        res = lex.clone_token(t, list_allocator);
+        res.kind = .String;
+        res.text = fmt.aprintf("%q", res.filename);
+        
+        case "__LINE__":
+        t := tokens;
+        tokens = tokens.next;
+        for t.from != nil do t = t.from;
+        res = lex.clone_token(t, list_allocator);
+        res.kind = .Integer;
+        res.text = fmt.aprintf("%d", res.line);
+        res.value.size = 4;
+        res.value.base = 10;
+        res.value.val = u64(res.line);
+        
+        case "__COUNTER__":
+        res = lex.clone_token(tokens, list_allocator);
+        tokens = tokens.next;
+        res.kind = .Integer;
+        res.text = fmt.aprintf("%d", counter);
+        res.value.size = 4;
+        res.value.base = 10;
+        res.value.val = u64(counter);
+        counter += 1;
+    }
+    
+    if res == nil do return false;
+    res.next = tokens;
+    tokens = res;
+    return true;
+}
 try_expand_macro :: proc(using pp: ^Preprocessor) -> bool
 {
+    if try_special_macro(pp) do return true;
+    
     // Check for macro
     if !is_valid_ident(tokens) do return false;
     if hs.contains(tokens.hide_set, tokens.text) do return false;
@@ -162,7 +204,6 @@ try_expand_macro :: proc(using pp: ^Preprocessor) -> bool
     if !ok do return false;
     invocation := tokens;
     
-    //fmt.println("MACRO:", tokens);
     // If function style:
     body: ^Token;
     if macro.params != nil
@@ -208,6 +249,7 @@ try_expand_macro :: proc(using pp: ^Preprocessor) -> bool
     
     hs := hs.union_(invocation.hide_set, hs.make(invocation.text));
     lex.merge_hide_set(body, hs);
+    lex.token_list_set_origin(body, invocation);
     
     // Append body to beginning of `tokens`
     if body == nil do return true;
@@ -216,8 +258,6 @@ try_expand_macro :: proc(using pp: ^Preprocessor) -> bool
     
     end.next = tokens;
     tokens = body;
-    tokens.whitespace = invocation.whitespace;
-    tokens.first_on_line = invocation.first_on_line;
     return true;
 }
 
@@ -330,7 +370,6 @@ insert_macro_args :: proc(using pp: ^Preprocessor, body: ^Token, args: ^Macro_Ar
         }
     }
     
-    //fmt.println("AFTER ARGS:", lex.token_list_string(ret.next));
     return ret.next;
     
     search_args :: proc(args: ^Macro_Arg, param: ^Token) -> ^Macro_Arg
@@ -498,6 +537,61 @@ directive_include :: proc(using pp: ^Preprocessor)
     tokens = tokens.next; // include
     
     filename_tok := tokens;
+    filename, local_first := read_include_path(pp);
+    
+    path, idx := search_includes(pp, filename, local_first);
+    
+    if idx == -1
+    {
+        lex.error(filename_tok, "Cannot locate file %q for include", filename);
+        os.exit(1);
+    }
+    
+    if path in pragma_onces do return;
+    
+    fmt.printf("#include: %q\n", path);
+    inc_tokens, inc_ok := lex.lex_file(path, list_allocator);
+    if inc_tokens == nil do return; // Empty file?
+    lex.token_list_set_include(inc_tokens, idx);
+    
+    // Append included file to the beginning of `tokens`
+    end := inc_tokens;
+    for end.next != nil do end = end.next;
+    end.next = tokens;
+    tokens = inc_tokens;
+}
+
+directive_include_next :: proc(using pp: ^Preprocessor)
+{
+    tokens = tokens.next; // include_next
+    
+    filename_tok := tokens;
+    filename, local_first := read_include_path(pp);
+    
+    path, idx := search_includes_next(pp, filename, filename_tok.include_idx);
+    
+    if idx == -1
+    {
+        lex.error(filename_tok, "Cannot locate file %q for include", filename);
+        os.exit(1);
+    }
+    
+    if path in pragma_onces do return;
+    
+    fmt.printf("#include_next: %q\n", path);
+    inc_tokens, inc_ok := lex.lex_file(path, list_allocator);
+    if inc_tokens == nil do return; // Empty file?
+    lex.token_list_set_include(inc_tokens, idx);
+    
+    // Append included file to the beginning of `tokens`
+    end := inc_tokens;
+    for end.next != nil do end = end.next;
+    end.next = tokens;
+    tokens = inc_tokens;
+}
+
+read_include_path :: proc(using pp: ^Preprocessor) -> (string, bool)
+{
     local_first: bool;
     filename: string;
     #partial switch tokens.kind
@@ -517,50 +611,51 @@ directive_include :: proc(using pp: ^Preprocessor)
         filename = lex.token_run_string_unsafe(start, end);
     }
     
-    found := false;
-    buf: [1024]byte;
+    return filename, local_first;
+}
+
+search_includes_next :: proc(using pp: ^Preprocessor, filename: string, after: int) -> (string, int)
+{
+    next := include_dirs[after:];
+    found_in := -1;
     path: string;
+    for d, i in next
+    {
+        path = fmt.tprintf("%s/%s", d, filename);
+        if file.exists(path)
+        {
+            found_in = after+i+1;
+            break;
+        }
+    }
+    
+    return path, found_in;
+}
+
+search_includes :: proc(using pp: ^Preprocessor, filename: string, local_first: bool) -> (string, int)
+{
+    found_in := -1;
+    path: string;
+    
     if local_first
     {
-        path = fmt.bprintf(buf[:], "%s/%s", root_dir, filename);
-        found = file.exists(path);
+        path = fmt.tprintf("%s/%s", root_dir, filename);
+        if file.exists(path) do found_in = 0;
     }
-    if !found
+    if found_in == -1
     {
-        for d in include_dirs
+        for d, i in include_dirs
         {
-            path = fmt.bprintf(buf[:], "%s/%s", d, filename);
+            path = fmt.tprintf("%s/%s", d, filename);
             if file.exists(path)
             {
-                found = true;
+                found_in = i+1;
                 break;
             }
         }
     }
     
-    if !found
-    {
-        lex.error(filename_tok, "Cannot locate file %q for include", filename);
-        os.exit(1);
-    }
-    
-    if path in pragma_onces do return;
-    
-    fmt.printf("#include: %q\n", path);
-    inc_tokens, inc_ok := lex.lex_file(path, list_allocator);
-    if inc_tokens == nil do return; // Empty file?
-    
-    // Append included file to the beginning of `tokens`
-    end := inc_tokens;
-    for end.next != nil do end = end.next;
-    end.next = tokens;
-    tokens = inc_tokens;
-}
-
-directive_include_next :: proc(using pp: ^Preprocessor)
-{
-    lex.error(tokens, "#include_next not yet implemented");
-    os.exit(1);
+    return path, found_in;
 }
 
 directive_ifdef :: proc(using pp: ^Preprocessor, invert := false)

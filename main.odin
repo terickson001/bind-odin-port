@@ -36,20 +36,20 @@ print_tokens :: proc(path: string, tokens: ^lex.Token)
     
     b := make_builder();
     write_string(&b, tokens.text);
-    prev := tokens;
     for t := tokens.next; t != nil; t = t.next
     {
-        if t.first_on_line
+        pos := t;
+        for pos.first_from do pos = pos.from;
+        if pos.first_on_line
         {
             write_byte(&b, '\n');
-            for _ in 0..<(t.whitespace) do write_byte(&b, ' ');
+            for _ in 0..<(pos.whitespace) do write_byte(&b, ' ');
         }
         else
         {
-            if t.whitespace > 0 do write_byte(&b, ' ');
+            if pos.whitespace > 0 do write_byte(&b, ' ');
         }
         write_string(&b, t.text);
-        prev = t;
     }
     
     str := to_string(b);

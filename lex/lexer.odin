@@ -672,3 +672,20 @@ token_list_string :: proc(tokens: ^Token, quoted := false, allocator := context.
     
     return string(buf[:idx]);
 }
+
+token_list_set_origin :: proc(tokens: ^Token, from: ^Token)
+{
+    if tokens != nil do tokens.first_from = true;
+    for t := tokens; t != nil; t = t.next
+    {
+        t.from = from;
+    }
+}
+
+token_list_set_include :: proc(tokens: ^Token, idx: int)
+{
+    for t := tokens; t != nil; t = t.next
+    {
+        t.include_idx = idx;
+    }
+}

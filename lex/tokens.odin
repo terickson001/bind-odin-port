@@ -11,9 +11,12 @@ Token :: struct
     first_on_line: bool,
     value: Value,
     whitespace: int,
-    
-    hide_set: ^hs.Hide_Set,
     using location: common.File_Location,
+    
+    from: ^Token,           // Token that led to this one
+    first_from: bool,       // First token in replacement?
+    hide_set: ^hs.Hide_Set, // Set of macros that should not be expanded
+    include_idx: int,       // Solution for #include_next
 }
 
 Value :: struct

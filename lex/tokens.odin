@@ -41,6 +41,7 @@ clone_token :: proc(token: ^Token, allocator := context.allocator) -> ^Token
     return ret;
 }
 
+#assert(int(Token_Kind.__KEYWORD_END) == len(TOKEN_STRINGS)-1);
 Token_Kind :: enum
 {
     Invalid,
@@ -142,14 +143,15 @@ Token_Kind :: enum
     _goto,
     _const,
     _sizeof,
-    _Alignof,
+    __Alignof,
     _volatile,
     _register,
     _inline,
-    ___inline_,
+    ___inline__,
     ___inline,
     ___forceinline,
     ___attribute__,
+    ___alignof__,
     ___restrict,
     ___extension__,
     ___asm__,
@@ -175,7 +177,7 @@ Token_Kind :: enum
     __KEYWORD_END    = ___unaligned,
 }
 
-TOKEN_STRINGS :: [?]string{
+@static TOKEN_STRINGS := [?]string{
     "Invalid",
     "EOF",
     "Comment",
@@ -279,11 +281,12 @@ TOKEN_STRINGS :: [?]string{
     "__inline",
     "__forceinline",
     "__attribute__",
+    "___alignof__",
     "__restrict",
     "__extension__",
     "__asm__",
     "__pragma",
-    "__Pragma",
+    "_Pragma",
     "__cdecl",
     "__clrcall",
     "__stdcall",

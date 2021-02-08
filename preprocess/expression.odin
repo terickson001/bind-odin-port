@@ -278,10 +278,7 @@ eval_expression :: proc(pp: ^Preprocessor, expr: ^Expr) -> u64
 
 parse_expression :: proc(pp: ^Preprocessor, expr: ^^Token) -> ^Expr
 {
-    // fmt.printf("PREP: %#v\n", expr^.location);
-    // fmt.println("BEFORE PREP:", lex.token_list_string(expr^));
     prep_expr(pp, expr);
-    // fmt.println("AFTER_PREP:", lex.token_list_string(expr^));
     ret := _parse_expression(pp, expr);
     if ret == nil do return make_expr(CONSTANT_ZERO);
     return ret;

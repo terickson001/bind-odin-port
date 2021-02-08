@@ -23,8 +23,14 @@ main :: proc()
     preprocessor := pp.make_preprocessor(opt);
     predef_ok := pp.get_predefined_macros(preprocessor, sys_info);
     out, ok := pp.preprocess_file(preprocessor, "test.c");
-    
     print_tokens("temp.pp", out);
+    
+    parser := parse.make_parser(out);
+    parse.parse_file(&parser);
+    for d in parser.file.decls
+    {
+        fmt.println(d.derived);
+    }
     // free_all(preprocessor.token_allocator); // @note(Tyler): Seg-Fault: Why?
 }
 

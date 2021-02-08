@@ -8,6 +8,13 @@ Token :: lex.Token;
 @private
 Type :: type.Type;
 
+make :: proc(variant: $T) -> ^T
+{
+    n := new_clone(variant);
+    n.derived = n^;
+    return n;
+}
+
 File :: struct
 {
     filename: string,
@@ -17,7 +24,6 @@ File :: struct
 
 Node :: struct
 {
-    idx: int,
     type: ^Type,
     
     no_print: bool,
@@ -69,7 +75,7 @@ Attribute :: struct
 Attr_List :: struct
 {
     using node: Node,
-    list: [dynamic]^Node,
+    list: []^Node,
 }
 
 Invalid_Expr :: struct
@@ -109,15 +115,15 @@ Paren_Expr :: struct
 Selector_Expr :: struct
 {
     using node: Node,
-    token: ^Token,
     lhs, rhs: ^Node,
+    token: ^Token,
 }
 
 Index_Expr :: struct
 {
     using node: Node,
-    open, close: ^Token,
     expr, index: ^Node,
+    open, close: ^Token,
 }
 
 Call_Expr :: struct
@@ -241,7 +247,14 @@ Branch_Stmt :: struct
 
 Var_Decl_Kind :: enum u8
 {
-    
+    Variable,
+    Field,
+    Parameter,
+    AnonParameter,
+    VaArgs,
+    AnonRecord,
+    AnonBitfield,
+    Typedef,
 }
 
 Var_Decl :: struct
@@ -295,6 +308,13 @@ Float_Type :: struct
 {
     using node: Node,
     specifiers: ^Token,
+}
+
+Numeric_Type :: struct
+{
+    using node: Node,
+    token: ^Token,
+    name: string,
 }
 
 Pointer_Type :: struct

@@ -12,8 +12,8 @@ import "parse"
 main :: proc()
 {
     opt := pp.Options{
-        //root_dir = "/usr/include/X11",
-        root_dir = ".",
+        root_dir = "/usr/include/X11",
+        //root_dir = ".",
     };
     sys_info := pp.get_system_directories();
     opt.include_dirs = make([]string, len(sys_info.include)+1);
@@ -22,7 +22,7 @@ main :: proc()
     
     preprocessor := pp.make_preprocessor(opt);
     predef_ok := pp.get_predefined_macros(preprocessor, sys_info);
-    out, ok := pp.preprocess_file(preprocessor, "test.c");
+    out, ok := pp.preprocess_file(preprocessor, "Xlib.h");
     print_tokens("temp.pp", out);
     
     parser := parse.make_parser(out);

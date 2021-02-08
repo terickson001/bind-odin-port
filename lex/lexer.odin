@@ -581,22 +581,28 @@ lex_file :: proc(filename: string, allocator := context.allocator) -> (^Token, b
     return run_lexer(&lexer, allocator);
 }
 
-syntax_error :: proc(using token: ^Token, fmt_str: string, args: ..any)
+syntax_error :: proc(token: ^Token, fmt_str: string, args: ..any)
 {
+    using t := token;
+    for t.from != nil do t = t.from;
     fmt.eprintf("%s(%d:%d): \x1b[31mSYNTAX ERROR:\x1b[0m %s\n",
                 location.filename, location.line, location.column,
                 fmt.tprintf(fmt_str, ..args));
 }
 
-error :: proc(using token: ^Token, fmt_str: string, args: ..any)
+error :: proc(token: ^Token, fmt_str: string, args: ..any)
 {
+    using t := token;
+    for t.from != nil do t = t.from;
     fmt.eprintf("%s(%d:%d): \x1b[31mERROR:\x1b[0m %s\n",
                 location.filename, location.line, location.column,
                 fmt.tprintf(fmt_str, ..args));
 }
 
-warning :: proc(using token: ^Token, fmt_str: string, args: ..any)
+warning :: proc(token: ^Token, fmt_str: string, args: ..any)
 {
+    using t := token;
+    for t.from != nil do t = t.from;
     fmt.eprintf("%s(%d:%d): \x1b[35mWARNING:\x1b[0m %s\n",
                 location.filename, location.line, location.column,
                 fmt.tprintf(fmt_str, ..args));

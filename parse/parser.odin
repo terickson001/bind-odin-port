@@ -330,6 +330,7 @@ parse_unary_expr :: proc(using p: ^Parser, parent_is_sizeof := false) -> ^Node
                 return ast.make(ast.Cast_Expr{{}, open, close, type, parse_unary_expr(p, is_sizeof)});
             }
         }
+        tokens = open;
     }
     
     return parse_postfix_expr(p);
@@ -393,7 +394,7 @@ parse_expr_list :: proc(using p: ^Parser) -> ^Node
 parse_attributes :: proc(using p: ^Parser) -> ^Node
 {
     token := expect(p, .___attribute__);
-    open  := expect(p, .CloseParen);
+    open  := expect(p, .OpenParen);
     expect(p, .OpenParen);
     
     close: ^Token;
@@ -646,8 +647,8 @@ parse_record :: proc(using p: ^Parser) -> ^Node
     }
     
     name, fields: ^Node;
-    if tokens.kind == .Ident       do name   = parse_ident(p);
-    if tokens.kind == .OpenBracket do fields = parse_record_fields(p);
+    if tokens.kind == .Ident     do name   = parse_ident(p);
+    if tokens.kind == .OpenBrace do fields = parse_record_fields(p);
     
     if name == nil && fields == nil
     {
@@ -712,8 +713,8 @@ parse_enum :: proc(using p: ^Parser) -> ^Node
     }
     
     name, fields: ^Node;
-    if tokens.kind == .Ident       do name   = parse_ident(p);
-    if tokens.kind == .OpenBracket do fields = parse_enum_fields(p);
+    if tokens.kind == .Ident     do name   = parse_ident(p);
+    if tokens.kind == .OpenBrace do fields = parse_enum_fields(p);
     
     if name == nil && fields == nil
     {
@@ -969,6 +970,7 @@ parse_type :: proc(using p: ^Parser, var_name: ^^Node, check_type_table := false
             case .___extension__: extension = true;
             case: break skip;
         }
+        advance(p);
     }
     
     base_type: ^Node;
@@ -1031,7 +1033,7 @@ parse_decl :: proc(using p: ^Parser, var_kind: ast.Var_Decl_Kind) -> ^Node
             parse_decl_spec(p);
             
             case .___attribute__:
-            for tokens.kind == .___attribute__ do parse_attribute(p);
+            for tokens.kind == .___attribute__ do parse_attributes(p);
             
             case ._static:
             if static do lex.error(tokens, "declaration has already been declared static");

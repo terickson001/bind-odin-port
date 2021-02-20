@@ -9,12 +9,15 @@ import "core:c"
 Primitive_Flag :: enum
 {
     Integer,
+    Unsigned,
     Float,
 }
 Primitive_Flags :: bit_set[Primitive_Flag];
 
 Primitive_Kind :: enum
 {
+    void,
+    
     char,
     
     schar,
@@ -32,19 +35,34 @@ Primitive_Kind :: enum
     float,
     double,
     longdouble,
+    
+    i8,
+    i16,
+    i32,
+    i64,
+    
+    u8,
+    u16,
+    u32,
+    u64,
 }
 
 Type :: struct
 {
+    next: ^Type,
     size: int,
+    align: int,
     variant: union
     {
         Primitive,
         Named,
         Pointer,
+        Array,
         Func,
         Struct,
         Union,
+        Bitfield,
+        Va_Arg,
     },
 }
 
@@ -63,8 +81,8 @@ Named :: struct
 
 Func :: struct
 {
-    params: []^Type,
     ret: ^Type,
+    params: []^Type,
 }
 
 Pointer :: struct
@@ -82,26 +100,56 @@ Union :: struct
     fields: []^Type,
 }
 
-@static type_char := Type{size_of(c.char), Primitive{.char, "char", {.Integer}}};
+Array :: struct
+{
+    base: ^Type,
+    size: i64,
+}
 
-@static type_schar     := Type{size_of(c.schar),     Primitive{.schar,     "schar",     {.Integer}}};
-@static type_short     := Type{size_of(c.short),     Primitive{.short,     "short",     {.Integer}}};
-@static type_int       := Type{size_of(c.int),       Primitive{.int,       "int",       {.Integer}}};
-@static type_long      := Type{size_of(c.long),      Primitive{.long,      "long",      {.Integer}}};
-@static type_longlong  := Type{size_of(c.longlong),  Primitive{.longlong,  "longlong",  {.Integer}}};
+Bitfield :: struct
+{
+    base: ^Type,
+    size: i64,
+}
 
-@static type_uchar     := Type{size_of(c.uchar),     Primitive{.uchar,     "uchar",     {.Integer}}};
-@static type_ushort    := Type{size_of(c.ushort),    Primitive{.ushort,    "ushort",    {.Integer}}};
-@static type_uint      := Type{size_of(c.uint),      Primitive{.uint,      "uint",      {.Integer}}};
-@static type_ulong     := Type{size_of(c.ulong),     Primitive{.ulong,     "ulong",     {.Integer}}};
-@static type_ulonglong := Type{size_of(c.ulonglong), Primitive{.ulonglong, "ulonglong", {.Integer}}};
+Va_Arg :: struct {}
 
-@static type_float      := Type{size_of(c.float),  Primitive{.float,      "float",      {.Float}}};
-@static type_double     := Type{size_of(c.double), Primitive{.double,     "double",     {.Float}}};
-@static type_longdouble := Type{size_of(c.double), Primitive{.longdouble, "longdouble", {.Float}}};
+@static type_void := Type{size=0, variant=Primitive{.void, "void", {}}};
+
+@static type_char      := Type{size=size_of(c.char), variant=Primitive{.char, "char", {.Integer}}};
+
+@static type_schar     := Type{size=size_of(c.schar),     variant=Primitive{.schar,     "schar",     {.Integer}}};
+@static type_short     := Type{size=size_of(c.short),     variant=Primitive{.short,     "short",     {.Integer}}};
+@static type_int       := Type{size=size_of(c.int),       variant=Primitive{.int,       "int",       {.Integer}}};
+@static type_long      := Type{size=size_of(c.long),      variant=Primitive{.long,      "long",      {.Integer}}};
+@static type_longlong  := Type{size=size_of(c.longlong),  variant=Primitive{.longlong,  "longlong",  {.Integer}}};
+
+@static type_uchar     := Type{size=size_of(c.uchar),     variant=Primitive{.uchar,     "uchar",     {.Integer, .Unsigned}}};
+@static type_ushort    := Type{size=size_of(c.ushort),    variant=Primitive{.ushort,    "ushort",    {.Integer, .Unsigned}}};
+@static type_uint      := Type{size=size_of(c.uint),      variant=Primitive{.uint,      "uint",      {.Integer, .Unsigned}}};
+@static type_ulong     := Type{size=size_of(c.ulong),     variant=Primitive{.ulong,     "ulong",     {.Integer, .Unsigned}}};
+@static type_ulonglong := Type{size=size_of(c.ulonglong), variant=Primitive{.ulonglong, "ulonglong", {.Integer, .Unsigned}}};
+
+@static type_float      := Type{size=size_of(c.float),  variant=Primitive{.float,      "float",      {.Float}}};
+@static type_double     := Type{size=size_of(c.double), variant=Primitive{.double,     "double",     {.Float}}};
+@static type_longdouble := Type{size=size_of(c.double), variant=Primitive{.longdouble, "longdouble", {.Float}}};
+
+@static type_u8  := Type{size=size_of(u8),  variant=Primitive{.u8,  "u8",  {.Integer}}};
+@static type_u16 := Type{size=size_of(u16), variant=Primitive{.u16, "u16", {.Integer}}};
+@static type_u32 := Type{size=size_of(u32), variant=Primitive{.u32, "u32", {.Integer}}};
+@static type_u64 := Type{size=size_of(u64), variant=Primitive{.u64, "u64", {.Integer}}};
+
+@static type_i8  := Type{size=size_of(i8),  variant=Primitive{.i8,  "i8",  {.Integer}}};
+@static type_i16 := Type{size=size_of(i16), variant=Primitive{.i16, "i16", {.Integer}}};
+@static type_i32 := Type{size=size_of(i32), variant=Primitive{.i32, "i32", {.Integer}}};
+@static type_i64 := Type{size=size_of(i64), variant=Primitive{.i64, "i64", {.Integer}}};
+
+@static type_va_arg := Type{size=0, variant=Va_Arg{}};
 
 @static primitive_types := [?]^Type
 {
+    &type_void,
+    
     &type_char,
     
     &type_schar,
@@ -119,10 +167,21 @@ Union :: struct
     &type_float,
     &type_double,
     &type_longdouble,
+    
+    &type_i8,
+    &type_i16,
+    &type_i32,
+    &type_i64,
+    
+    &type_u8,
+    &type_u16,
+    &type_u32,
+    &type_u64,
 };
 
 is_primitive_class :: proc(type: ^Type, flag: Primitive_Flag) -> bool
 {
+    if type == nil do return false;
     #partial switch v in type.variant
     {
         case Primitive:
@@ -135,6 +194,16 @@ is_primitive_class :: proc(type: ^Type, flag: Primitive_Flag) -> bool
 is_integer :: proc(type: ^Type) -> bool
 {
     return is_primitive_class(type, .Integer);
+}
+
+is_signed :: proc(type: ^Type) -> bool
+{
+    return is_primitive_class(type, .Integer) && !is_primitive_class(type, .Unsigned);
+}
+
+is_unsigned :: proc(type: ^Type) -> bool
+{
+    return is_primitive_class(type, .Integer) && is_primitive_class(type, .Unsigned);
 }
 
 is_float :: proc(type: ^Type) -> bool
@@ -150,7 +219,7 @@ hash_mix :: proc(a, b: u64) -> u64
 }
 
 @private
-hash_multi :: proc(args: ..any) -> u64
+hash_multi :: proc(args: []any) -> u64
 {
     res: u64;
     for a, i in args
@@ -181,7 +250,6 @@ hash_multi :: proc(args: ..any) -> u64
     
     return res;
 }
-
 cache_type :: proc(type_map: ^map[u64]^Type, type: ^Type, args: ..any)
 {
     key := hash_multi(args);
@@ -214,19 +282,47 @@ pointer_type :: proc(base: ^Type) -> ^Type
     
     type = make_type(Pointer{base});
     type.size = size_of(rawptr);
+    type.align = type.size;
     cache_type(&cached_ptr_types, type, base);
     return type;
 }
 
 @static cached_func_types: map[u64]^Type;
-func_type :: proc(params: []^Type, ret: ^Type) -> ^Type
+func_type :: proc(ret: ^Type, params: []^Type) -> ^Type
 {
     type := get_cached_type(cached_func_types, params, ret);
     if type != nil do return type;
     
-    type = make_type(Func{params, ret});
+    type = make_type(Func{ret, params});
     type.size = size_of(rawptr);
+    type.align = type.size;
     cache_type(&cached_func_types, type, params, ret);
+    return type;
+}
+
+@static cached_array_types: map[u64]^Type;
+array_type :: proc(base_type: ^Type, size: i64) -> ^Type
+{
+    type := get_cached_type(cached_array_types, base_type, size);
+    if type != nil do return type;
+    
+    type = make_type(Array{base_type, size});
+    type.size = base_type.size * int(size);
+    type.align = base_type.align;
+    cache_type(&cached_array_types, type, base_type, size);
+    return type;
+}
+
+@static cached_bitfield_types: map[u64]^Type;
+bitfield_type :: proc(base_type: ^Type, size: i64) -> ^Type
+{
+    type := get_cached_type(cached_bitfield_types, base_type, size);
+    if type != nil do return type;
+    
+    type = make_type(Bitfield{base_type, size});
+    type.size = base_type.size;
+    type.align = 0;
+    cache_type(&cached_bitfield_types, type, base_type, size);
     return type;
 }
 
@@ -241,7 +337,33 @@ struct_type :: proc(fields: []^Type) -> ^Type
 union_type :: proc(fields: []^Type) -> ^Type
 {
     type := make_type(Union{fields});
-    // @todo(Tyler): Determine struct size (Is this feasible/necessary?)
+    // @todo(Tyler): Determine union size (Is this feasible/necessary?)
     type.size = 0;
+    return type;
+}
+
+named_type :: proc(name: string, base_type: ^Type) -> ^Type
+{
+    type := make_type(Named{name, base_type});
+    type.size = base_type.size;
+    type.align = base_type.align;
+    return type;
+}
+
+base_type :: proc(type: ^Type) -> ^Type
+{
+    switch v in type.variant
+    {
+        case Pointer: return v.base;
+        case Array: return v.base;
+        
+        case Primitive: return type;
+        case Named: return type;
+        case Func: return type;
+        case Struct: return type;
+        case Union: return type;
+        case Bitfield: return type;
+        case Va_Arg: return type;
+    }
     return type;
 }

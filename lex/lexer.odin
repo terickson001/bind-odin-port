@@ -177,10 +177,15 @@ lex_number :: proc(using lexer: ^Lexer) -> (token: Token)
     if !ok do error(&token, "Invalid constant");
     
     longs := 0;
+    f_suffix := false;
     loop: for idx < len(data)
     {
         switch data[idx]
         {
+            case 'f':
+            f_suffix = true;
+            idx += 1;
+            
             case 'u', 'U':
             token.value.unsigned = true;
             idx += 1;
@@ -218,11 +223,19 @@ lex_number :: proc(using lexer: ^Lexer) -> (token: Token)
         }
     }
     
-    switch longs
+    if token.kind == .Integer
     {
-        case 0: if token.value.size == 0 do token.value.size = 4;
-        case 1: token.value.size = size_of(c.long);
-        case 2: token.value.size = size_of(c.longlong);
+        switch longs
+        {
+            case 0: if token.value.size == 0 do token.value.size = 4;
+            case 1: token.value.size = size_of(c.long);
+            case 2: token.value.size = size_of(c.longlong);
+        }
+    }
+    else
+    {
+        if f_suffix do token.value.size = 4;
+        else do token.value.size = 8;
     }
     
     token.text = string(data[start:idx]);

@@ -20,6 +20,8 @@ Parser :: struct
     type_table: map[string]^Node,
     opaque_types: map[string]^Node,
     
+    curr_decl: ^Node,
+    
     file: ast.File,
 }
 
@@ -28,6 +30,8 @@ make_parser :: proc(tokens: ^Token) -> Parser
     parser: Parser;
     
     parser.tokens = tokens;
+    parser.file.decls = ast.make(ast.Ident{});
+    parser.curr_decl = parser.file.decls;
     
     return parser;
 }
@@ -97,28 +101,9 @@ parse_file :: proc(using p: ^Parser)
             os.exit(1);
         }
         
-        switch v in n.derived
-        {
-            case ast.Var_Decl_List:
-            for var in v.list
-            {
-                append(&file.decls, var);
-            }
-            
-            case:
-            append(&file.decls, n);
-        }
+        ast.appendv(&curr_decl, n);
     }
-}
-
-ident :: proc(node: ^Node) -> string
-{
-    return node.derived.(ast.Ident).token.text;
-}
-
-var_ident :: proc(node: ^Node) -> string
-{
-    return node.derived.(ast.Var_Decl).name.derived.(ast.Ident).token.text;
+    file.decls = file.decls.next;
 }
 
 parse_typedef :: proc(using p: ^Parser) -> ^Node
@@ -126,20 +111,13 @@ parse_typedef :: proc(using p: ^Parser) -> ^Node
     token := expect(p, ._typedef);
     vars  := parse_decl(p, .Typedef);
     
+    for var := vars; var != nil; var = var.next
+    {
+        type_table[ast.var_ident(var)] = var;
+    }
     switch v in vars.derived
     {
-        case ast.Var_Decl:
-        type_table[var_ident(vars)] = vars;
-        list := make([]^Node, 1);
-        list[0] = vars;
-        vars = ast.make(ast.Var_Decl_List{{}, list, .Typedef});
-        
-        case ast.Var_Decl_List: 
-        for var in v.list 
-        {
-            type_table[var_ident(var)] = var;
-        }
-        
+        case ast.Var_Decl: break;
         case: 
         lex.error(token, "Expected type declaration after 'typedef', got none");
         return nil;
@@ -285,7 +263,7 @@ parse_postfix_expr :: proc(using p: ^Parser) -> ^Node
             expr = parse_selector_expr(p, expr);
             
             case .Inc, .Dec:
-            expr = ast.make(ast.Post_Inc_Expr{{}, expr, advance(p)});
+            expr = ast.make(ast.Inc_Dec_Expr{{}, expr, advance(p)});
             
             case: break loop;
         }
@@ -381,14 +359,15 @@ parse_expression :: proc(using p: ^Parser) -> ^Node
 
 parse_expr_list :: proc(using p: ^Parser) -> ^Node
 {
-    list: [dynamic]^Node;
-    append(&list, parse_expression(p));
+    list: Node;
+    curr := &list;
+    ast.append(&curr, parse_expression(p));
     for allow(p, .Comma) != nil
     {
-        append(&list, parse_expression(p));
+        ast.append(&curr, parse_expression(p));
     }
     
-    return ast.make(ast.Expr_List{{}, list[:]});
+    return list.next;
 }
 
 parse_attributes :: proc(using p: ^Parser) -> ^Node
@@ -404,17 +383,19 @@ parse_attributes :: proc(using p: ^Parser) -> ^Node
         return nil;
     }
     
-    list: [dynamic]^Node;
-    append(&list, parse_attribute(p));
+    list: Node;
+    curr := &list;
+    
+    ast.append(&curr, parse_attribute(p));
     for allow(p, .Comma) != nil
     {
-        append(&list, parse_attribute(p));
+        ast.append(&curr, parse_attribute(p));
     }
     
     expect(p, .CloseParen);
     close = expect(p, .CloseParen);
     
-    return ast.make(ast.Attr_List{{}, list[:]});
+    return list.next;
 }
 
 parse_attribute :: proc(using p: ^Parser) -> ^Node
@@ -451,7 +432,7 @@ parse_decl_spec :: proc(using p: ^Parser) -> ^Node
     arg: ^Node;
     if allow(p, .OpenParen) != nil
     {
-        switch ident(name)
+        switch ast.ident(name)
         {
             case "align":      arg = parse_expression(p);
             case "allocate":   arg = parse_string(p);
@@ -459,7 +440,7 @@ parse_decl_spec :: proc(using p: ^Parser) -> ^Node
             case "property":   arg = parse_expr_list(p);
             case "uuid":       arg = parse_string(p);
             case "deprecated": arg = parse_string(p);
-            case: lex.error(tok, "'__declspec(%s)' takes no arguments", ident(name));
+            case: lex.error(tok, "'__declspec(%s)' takes no arguments", ast.ident(name));
         }
         expect(p, .CloseParen);
     }
@@ -484,62 +465,6 @@ parse_compound_statement :: proc(using p: ^Parser) -> ^Node
         advance(p);
     }
     return ast.make(ast.Compound_Stmt{});
-}
-
-Type_Info :: struct
-{
-    base: ^Node,
-    stars: int,
-    const: bool,
-    array: bool,
-    bitfield: bool,
-    function: bool,
-}
-
-get_type_info :: proc(n: ^Node) -> (ti: Type_Info)
-{
-    type := n;
-    loop: for
-    {
-        switch v in type.derived
-        {
-            case ast.Pointer_Type:
-            type = v.type_expr;
-            ti.stars += 1;
-            
-            case ast.Array_Type:
-            type = v.type_expr;
-            ti.array = true;
-            
-            case ast.Const_Type:
-            type = v.type_expr;
-            ti.const = true;
-            
-            case ast.Bitfield_Type:
-            type = v.type_expr;
-            ti.bitfield = true;
-            
-            case ast.Function_Type:
-            ti.function = true;
-            break loop;
-            
-            case: break loop;
-        }
-    }
-    
-    ti.base = type;
-    return;
-}
-
-get_base_type :: proc(n: ^Node) -> ^Node
-{
-    ti := get_type_info(n);
-    if ti.function
-    {
-        return ti.base.derived.(ast.Function_Type).ret_type;
-    }
-    
-    return ti.base;
 }
 
 _type_add_child :: proc(parent: ^^Node, child: ^Node)
@@ -603,28 +528,21 @@ parse_record_fields :: proc(using p: ^Parser) -> ^Node
     open := expect(p, .OpenBrace);
     if allow(p, .CloseBrace) != nil do return nil;
     
-    vars: [dynamic]^Node;
+    vars: Node;
+    curr := &vars;
     
     close: ^Token;
     record, var: ^Node;
     for
     {
         var = parse_decl(p, .Field);
-        
-        switch v in var.derived
-        {
-            case ast.Var_Decl: 
-            append(&vars, var);
-            
-            case ast.Var_Decl_List: 
-            for item in v.list do append(&vars, item);
-        }
+        ast.appendv(&curr, var);
         
         close = allow(p, .CloseBrace);
         if close != nil do break;
     }
     
-    return ast.make(ast.Var_Decl_List{{}, vars[:], .Field});
+    return vars.next;
 }
 
 parse_record :: proc(using p: ^Parser) -> ^Node
@@ -672,7 +590,9 @@ parse_enum_fields :: proc(using p: ^Parser) -> ^Node
     open := expect(p, .OpenBrace);
     if allow(p, .CloseBrace) != nil do return nil;
     
-    fields: [dynamic]^Node;
+    fields: Node;
+    curr := &fields;
+    
     name, value: ^Node;
     close: ^Token;
     for
@@ -681,7 +601,7 @@ parse_enum_fields :: proc(using p: ^Parser) -> ^Node
         name = parse_ident(p);
         
         if allow(p, .Eq) != nil do value = parse_expression(p);
-        append(&fields, ast.make(ast.Enum_Field{{}, name, value}));
+        ast.append(&curr, ast.make(ast.Enum_Field{{}, name, value}));
         
         if allow(p, .Comma) == nil
         {
@@ -695,7 +615,7 @@ parse_enum_fields :: proc(using p: ^Parser) -> ^Node
         }
     }
     
-    return ast.make(ast.Enum_Field_List{{}, fields[:]});
+    return fields.next;
 }
 
 parse_enum :: proc(using p: ^Parser) -> ^Node
@@ -847,17 +767,19 @@ parse_parameter_list :: proc(using p: ^Parser) -> ^Node
     open := expect(p, .OpenParen);
     if allow(p, .CloseParen) != nil do return nil;
     
-    params: [dynamic]^Node;
+    params: Node;
+    curr := &params;
+    
     var_decl: ^Node;
     for
     {
         var_decl = parse_parameter(p);
-        append(&params, var_decl);
+        ast.append(&curr, var_decl);
         if allow(p, .Comma) == nil do break;
     }
     close := expect(p, .CloseParen);
     
-    return ast.make(ast.Var_Decl_List{{}, params[:], .Parameter});
+    return params.next;
 }
 
 parse_type_operand :: proc(using p: ^Parser, var_name: ^^Node, cc: ^^Token) -> ^Node
@@ -987,7 +909,7 @@ parse_type :: proc(using p: ^Parser, var_name: ^^Node, check_type_table := false
         
         case .Ident:
         base_type = parse_ident(p);
-        if check_type_table && ident(base_type) not_in type_table
+        if check_type_table && ast.ident(base_type) not_in type_table
         {
             tokens = reset;
             return nil;
@@ -1008,7 +930,7 @@ parse_type :: proc(using p: ^Parser, var_name: ^^Node, check_type_table := false
     
     if calling_convention != nil
     {
-        ti := get_type_info(type);
+        ti := ast.get_type_info(type);
         switch v in &ti.base.derived
         {
             case ast.Function_Type: 
@@ -1104,14 +1026,16 @@ parse_decl :: proc(using p: ^Parser, var_kind: ast.Var_Decl_Kind) -> ^Node
         return ast.make(ast.Function_Decl{{}, type, name, body});
     }
     
-    vars: [dynamic]^Node;
-    append(&vars, ast.make(ast.Var_Decl{{}, type, name, var_kind}));
-    base_type := get_base_type(type);
+    vars: Node;
+    curr := &vars;
+    
+    ast.append(&curr, ast.make(ast.Var_Decl{{}, type, name, var_kind}));
+    base_type := ast.get_base_type(type);
     for allow(p, .Comma) != nil
     {
         type = parse_type_spec(p, &name, nil);
         _type_add_child(&type, base_type);
-        append(&vars, ast.make(ast.Var_Decl{{}, type, name, var_kind}));
+        ast.append(&curr, ast.make(ast.Var_Decl{{}, type, name, var_kind}));
     }
     
     if tokens.kind == .Eq
@@ -1122,5 +1046,5 @@ parse_decl :: proc(using p: ^Parser, var_kind: ast.Var_Decl_Kind) -> ^Node
     
     expect(p, .Semicolon);
     
-    return ast.make(ast.Var_Decl_List{{}, vars[:], var_kind});
+    return vars.next;
 }

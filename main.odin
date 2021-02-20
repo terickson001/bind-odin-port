@@ -8,6 +8,9 @@ import "core:strings"
 import "lex"
 import pp "preprocess"
 import "parse"
+import "check"
+import "print"
+import "lib"
 
 main :: proc()
 {
@@ -15,23 +18,33 @@ main :: proc()
         root_dir = "/usr/include/X11",
         //root_dir = ".",
     };
-    sys_info := pp.get_system_directories();
-    opt.include_dirs = make([]string, len(sys_info.include)+1);
+    lib.init_system_directories();
+    opt.include_dirs = make([]string, len(lib.sys_info.include)+1);
     opt.include_dirs[0] = "include";
-    copy(opt.include_dirs[1:], sys_info.include[:]);
+    copy(opt.include_dirs[1:], lib.sys_info.include[:]);
     
     preprocessor := pp.make_preprocessor(opt);
-    predef_ok := pp.get_predefined_macros(preprocessor, sys_info);
+    predef_ok := pp.get_predefined_macros(preprocessor, lib.sys_info);
     out, ok := pp.preprocess_file(preprocessor, "Xlib.h");
     print_tokens("temp.pp", out);
     
+    
+    
     parser := parse.make_parser(out);
     parse.parse_file(&parser);
-    for d in parser.file.decls
-    {
-        fmt.println(d.derived);
-    }
-    // free_all(preprocessor.token_allocator); // @note(Tyler): Seg-Fault: Why?
+    /*
+        for n := parser.file.decls; n != nil; n = n.next
+        {
+            fmt.println(n.derived);
+        }
+    */
+    checker: check.Checker;
+    check.check_file(&checker, parser.file);
+    
+    printer := print.make_printer("out/out.odin", parser.file, checker.symbols);
+    library := lib.get_symbols("libX11.so");
+    printer.libs = []lib.Lib{library};
+    print.print_file(&printer);
 }
 
 print_tokens :: proc(path: string, tokens: ^lex.Token)

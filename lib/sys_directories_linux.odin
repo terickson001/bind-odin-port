@@ -1,4 +1,4 @@
-package preprocess
+package lib
 
 foreign import libc "system:c"
 
@@ -21,61 +21,35 @@ System_Info :: struct
     compiler: string,
 }
 
-get_predefined_macros :: proc(using pp: ^Preprocessor, info: System_Info) -> bool
-{
-    command: cstring;
-    switch info.compiler
-    {
-        case "gcc":   command = "echo | gcc -dM -E -xc - > predef.h";
-        case "clang": command = "echo | clang -dM -E -xc - > predef.h";
-    }
-    
-    res := popen(command, "r");
-    if res == nil
-    {
-        fmt.eprintf("Failed to get predefined macros from %s\n", info.compiler);
-        return false;
-    }
-    pclose(res);
-    
-    fd, err := os.open("./predef.h");
-    if err != os.ERROR_NONE
-    {
-        fmt.eprintf("ERROR: Could not open \"predef.h\"\n");
-        return false;
-    }
-    _, ok := preprocess_fd(pp, fd);
-    
-    os.close(fd);
-    
-    return ok;
-}
-
-get_system_directories :: proc(allocator := context.allocator) -> (info: System_Info)
+init_system_directories :: proc(allocator := context.allocator)
 {
     if file.exists(GCC_ROOT)
     {
-        info.include, info.lib = get_gcc_directories();
-        info.compiler = "gcc";
+        sys_info.include = get_gcc_directories();
+        sys_info.compiler = "gcc";
     }
     else
     {
-        info.include, info.lib = get_clang_directories();
-        info.compiler = "clang";
+        sys_info.include = get_clang_directories();
+        sys_info.compiler = "clang";
     }
-    fmt.printf("INCLUDE: %#v\n", info.include);
+    
+    dump_library_paths();
+    
+    fmt.printf("INCLUDE: %#v\n", sys_info.include);
+    fmt.printf("LIB: %#v\n", sys_info.lib);
+    
     return;
 }
 
 @(private="file")
-get_gcc_directories :: proc(allocator := context.allocator) -> ([]string, []string)
+get_gcc_directories :: proc(allocator := context.allocator) -> []string
 {
     versions := read_dir(GCC_ROOT);
-    if versions == nil do return nil, nil;
+    if versions == nil do return nil;
     slice.sort_by(versions, version_sort);
     
     include := make([dynamic]string, allocator);
-    lib := make([dynamic]string, allocator);
     
     got_include := false;
     buf: [2048]byte;
@@ -111,7 +85,7 @@ get_gcc_directories :: proc(allocator := context.allocator) -> ([]string, []stri
     for v in versions do delete(v);
     delete(versions);
     
-    return include[:], lib[:];
+    return include[:];
     
     version_sort :: proc(i, j: string) -> bool
     {
@@ -131,14 +105,13 @@ get_gcc_directories :: proc(allocator := context.allocator) -> ([]string, []stri
 }
 
 @(private="file")
-get_clang_directories :: proc(allocator := context.allocator) -> ([]string, []string)
+get_clang_directories :: proc(allocator := context.allocator) -> []string
 {
     versions := read_dir(CLANG_ROOT);
-    if versions == nil do return nil, nil;
+    if versions == nil do return nil;
     slice.sort_by(versions, version_sort);
     
     include := make([dynamic]string, allocator);
-    lib := make([dynamic]string, allocator);
     
     if file.exists("/usr/local/include")
     {
@@ -165,7 +138,7 @@ get_clang_directories :: proc(allocator := context.allocator) -> ([]string, []st
     for v in versions do delete(v);
     delete(versions);
     
-    return include[:], lib[:];
+    return include[:];
     
     version_sort :: proc(i, j: string) -> bool
     {
@@ -182,6 +155,57 @@ get_clang_directories :: proc(allocator := context.allocator) -> ([]string, []st
         }
         return false;
     }
+}
+
+dump_library_paths :: proc()
+{
+    command: cstring;
+    switch sys_info.compiler
+    {
+        case "gcc":   command = "gcc -print-search-dirs > lib_paths.txt";
+        case "clang": command = "clang -print-search-dirs > lib_paths.txt";
+    }
+    
+    res := popen(command, "r");
+    if res == nil
+    {
+        fmt.eprintf("Failed to get library paths from %s\n", sys_info.compiler);
+    }
+    pclose(res);
+    
+    file, ok := os.read_entire_file("./lib_paths.txt");
+    if !ok
+    {
+        fmt.eprintf("ERROR: Could not open \"lib_paths.txt\"\n");
+    }
+    
+    paths: [dynamic]string;
+    idx := 0;
+    for
+    {
+        if !strings.has_prefix(string(file[idx:]), "libraries:")
+        {
+            for file[idx] != '\n' do idx += 1;
+            idx += 1;
+            continue;
+        }
+        idx += len("libraries: =");
+        
+        for idx < len(file) && file[idx] != '\n'
+        {
+            start := idx;
+            for idx < len(file) && file[idx] != ':' && file[idx] != '\n'
+            {
+                idx += 1;
+            }
+            append(&paths, strings.clone(string(file[start:idx])));
+            idx += 1;
+        }
+        break;
+    }
+    delete(file);
+    
+    sys_info.lib = paths[:];
 }
 
 @(private="file")
@@ -240,6 +264,7 @@ foreign libc
     opendir  :: proc(name: cstring) -> ^DIR ---;
     closedir :: proc(dirp: ^DIR) -> c.int ---;
     readdir  :: proc(dirp: ^DIR) -> ^dirent ---;
+    
     
     popen    :: proc(command: cstring, type: cstring) -> ^FILE ---;
     pclose   :: proc(stream: ^FILE) -> c.int ---;

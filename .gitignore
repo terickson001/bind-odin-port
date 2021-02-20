@@ -1,3 +1,5 @@
 bind
 temp.pp
 predef.h
+lib_paths.txt
+out/

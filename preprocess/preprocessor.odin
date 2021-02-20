@@ -549,7 +549,7 @@ directive_include :: proc(using pp: ^Preprocessor)
     
     if path in pragma_onces do return;
     
-    fmt.printf("#include: %q\n", path);
+    // fmt.printf("#include: %q\n", path);
     inc_tokens, inc_ok := lex.lex_file(path, list_allocator);
     if inc_tokens == nil do return; // Empty file?
     lex.token_list_set_include(inc_tokens, idx);
@@ -578,7 +578,7 @@ directive_include_next :: proc(using pp: ^Preprocessor)
     
     if path in pragma_onces do return;
     
-    fmt.printf("#include_next: %q\n", path);
+    // fmt.printf("#include_next: %q\n", path);
     inc_tokens, inc_ok := lex.lex_file(path, list_allocator);
     if inc_tokens == nil do return; // Empty file?
     lex.token_list_set_include(inc_tokens, idx);

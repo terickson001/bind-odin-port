@@ -9,6 +9,8 @@ import "../ast"
 import "../lex"
 import "../type"
 import "../lib"
+import "../config"
+import "../path"
 
 @private
 Token :: lex.Token;
@@ -21,13 +23,9 @@ Type :: type.Type;
 
 Printer :: struct
 {
-    file: ast.File,
     symbols: map[string]^Symbol,
-    libs: []lib.Lib,
     
     out: os.Handle,
-    
-    source_order: bool,
     
     proc_link_padding: int,
     proc_name_padding: int,
@@ -39,18 +37,10 @@ Printer :: struct
 @static type_cstring: ^Type;
 @static type_rawptr: ^Type;
 
-make_printer :: proc(out_path: string, file: ast.File, symbols: map[string]^Symbol) -> Printer
+make_printer :: proc(symbols: map[string]^Symbol) -> Printer
 {
     p: Printer;
-    p.file = file;
     p.symbols = symbols;
-    err: os.Errno;
-    p.out, err = os.open(out_path, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0o644);
-    if err != os.ERROR_NONE
-    {
-        fmt.eprintf("Could not open file %q\n", out_path);
-        os.exit(1);
-    }
     
     if type_cstring == nil do type_cstring = type.pointer_type(&type.type_char);
     if type_rawptr  == nil do type_rawptr  = type.pointer_type(&type.type_void);
@@ -67,14 +57,33 @@ symbol_compare :: proc(i, j: ^Symbol) -> bool
         i_loc.column < j_loc.column;
 }
 
-print_file :: proc(using p: ^Printer)
+group_symbols :: proc(using p: ^Printer) -> map[string][dynamic]^Symbol
 {
-    syms := make([]^Symbol, len(symbols));
-    idx := 0;
+    files: map[string][dynamic]^Symbol;
+    
     for k, v in symbols
     {
         if !v.used do continue;
-        syms[idx] = v;
+        loc := ast.node_location(v.decl);
+        filename := path.base_name(loc.filename);
+        curr_file: [dynamic]^Symbol;
+        if filename in files
+        {
+            curr_file = files[filename];
+        }
+        append(&curr_file, v);
+        files[filename] = curr_file;
+    }
+    
+    return files;
+}
+
+set_padding :: proc(using p: ^Printer, syms: []^Symbol)
+{
+    var_name_padding = 0;
+    proc_name_padding = 0;
+    for v in syms
+    {
         if v.kind == .Var
         {
             name := ast.var_ident(v.decl);
@@ -85,22 +94,54 @@ print_file :: proc(using p: ^Printer)
             name := ast.ident(v.decl.derived.(ast.Function_Decl).name);
             proc_name_padding = max(proc_name_padding, len(name));
         }
-        idx += 1;
     }
-    syms = syms[:idx];
-    slice.sort_by(syms, symbol_compare);
+}
+
+print_symbols :: proc(using p: ^Printer, filepath: string, syms: []^Symbol)
+{
+    fmt.printf("%s: %d Symbols\n", filepath, len(syms));
+    path.create(filepath);
+    err: os.Errno;
+    p.out, err = os.open(filepath, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0o644);
+    if err != os.ERROR_NONE
+    {
+        fmt.eprintf("Could not open file %q\n", filepath);
+        os.exit(1);
+    }
+    defer os.close(p.out);
     
-    fmt.fprintf(out, "package %s\n\nimport _c \"core:c\"\n\n", "xlib");
+    slice.sort_by(syms, symbol_compare);
+    set_padding(p, syms);
+    
+    fmt.fprintf(out, "package %s\n\nimport _c \"core:c\"\n\n", config.global_config.package_name);
     
     for sym in syms
     {
         if sym.kind == .Type do print_node(p, sym.decl, 0, true, false);
     }
     
-    for l in libs
+    for l in config.global_config.libs
     {
+        has_exports := false;
+        for sym in syms
+        {
+            if sym.name in l.symbols
+            {
+                has_exports = true;
+                break;
+            }
+        }
+        if !has_exports do continue;
+        
         fmt.fprintf(out, "/***** %s *****/\n", l.name);
-        fmt.fprintf(out, "foreign import %s \"system:%s\"\n\n", l.name, l.file);
+        if l.from_system
+        {
+            fmt.fprintf(out, "foreign import %s \"system:%s\"\n\n", l.name, l.file);
+        }
+        else
+        {
+            fmt.fprintf(out, "foreign import %s \"%s\"\n\n", l.name, l.path);
+        }
         fmt.fprintf(out, "/* Variables */\n");
         fmt.fprintf(out, "foreign %s {{\n", l.name);
         for sym in syms
@@ -115,6 +156,33 @@ print_file :: proc(using p: ^Printer)
             if sym.kind == .Func && sym.name in l.symbols do print_node(p, sym.decl, 1, true, false);
         }
         fmt.fprintf(out, "}\n\n");
+    }
+}
+
+print_file :: proc(using p: ^Printer)
+{
+    if !config.global_config.separate_output
+    {
+        syms := make([]^Symbol, len(symbols));
+        idx := 0;
+        for k, v in symbols
+        {
+            if !v.used do continue;
+            syms[idx] = v;
+            idx += 1;
+        }
+        syms = syms[:idx];
+        
+        print_symbols(p, fmt.tprintf("%s/%s.odin", config.global_config.output, config.global_config.package_name), syms);
+    }
+    else
+    {
+        files := group_symbols(p);
+        fmt.printf("%#v\n", files);
+        for k, v in files
+        {
+            print_symbols(p, fmt.tprintf("%s/%s.odin", config.global_config.output, k), v[:]);
+        }
     }
 }
 
@@ -134,14 +202,8 @@ print_ident :: proc(using p: ^Printer, node: ^Node, indent: int)
     print_string(p, ast.ident(node), indent);
 }
 
-import "core:strings"
 print_node :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: bool, indent_first: bool)
 {
-    /*
-        loc := ast.node_location(node);
-        if !strings.has_prefix(loc.filename, "/usr/include/X11") do return;
-        */
-    
     switch v in node.derived
     {
         case ast.Ident:
@@ -154,6 +216,7 @@ print_node :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: bool,
         case ast.Var_Decl:
         print_variable(p, node, indent, top_level, 0);
         if top_level do fmt.fprintf(out, ";\n");
+        if v.kind == .Typedef do fmt.fprintf(out, "\n");
         
         case ast.Struct_Type:
         print_record(p, node, indent, top_level, indent_first);
@@ -260,6 +323,11 @@ print_type :: proc(using p: ^Printer, node: ^Node, indent: int)
             fmt.fprintf(out, "rawptr");
             break;
         }
+        else if config.global_config.use_cstring && node.type == type_cstring
+        {
+            fmt.fprintf(out, "cstring");
+            break;
+        }
         #partial switch _ in v.type_expr.type.variant
         {
             case type.Func: print_function_type(p, v.type_expr, 0);
@@ -314,6 +382,7 @@ print_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
         case ast.Struct_Type:   print_type         (p, node, indent);
         case ast.Union_Type:    print_type         (p, node, indent);
         case ast.Enum_Type:     print_type         (p, node, indent);
+        case ast.Basic_Lit:     print_string       (p, v.token.text, indent);
     }
 }
 
@@ -566,9 +635,11 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
     print_indent(p, indent);
     
     v := node.derived.(ast.Var_Decl);
+    typedef := false;
     #partial switch v.kind
     {
         case .Typedef:
+        typedef = true;
         name := ast.var_ident(node);
         fmt.fprintf(out, "%s :: ", name);
         switch t in v.type_expr.derived

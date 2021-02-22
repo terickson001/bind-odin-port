@@ -649,6 +649,8 @@ token_run_string_unsafe :: proc(start, end: ^Token) -> string
 
 token_list_string :: proc(tokens: ^Token, quoted := false, allocator := context.allocator) -> string
 {
+    if tokens == nil do return "";
+    
     tokens := tokens;
     n := len(tokens.text);
     for t := tokens.next; t != nil; t = t.next

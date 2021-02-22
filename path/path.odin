@@ -1,6 +1,5 @@
 package path_util
 
-
 @(private="file")
 is_sep :: proc(c: byte) -> bool
 {
@@ -89,4 +88,20 @@ ext :: proc(path: string) -> string
     }
     
     return "";
+}
+
+create :: proc(path: string)
+{
+    path := path;
+    if path == ""  do return;
+    if is_sep(path[0]) || (len(path) >= 2 && path[0] == '.' && is_sep(path[1]))
+    {
+        path = path[1:];
+    }
+    
+    for c, i in path
+    {
+        if !is_sep(u8(c)) do continue;
+        create_dir(path[:i]);
+    }
 }

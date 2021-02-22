@@ -62,12 +62,10 @@ File :: struct
 Node :: struct
 {
     next: ^Node,
-    
     type: ^Type,
     symbol: ^Symbol,
     
     uid: u64,
-    is_opaque: bool,
     
     derived: any,
 }

@@ -10,6 +10,7 @@ import "core:slice"
 import "core:strconv"
 
 import "../file"
+import "../path"
 
 GCC_ROOT :: "/usr/lib/gcc/x86_64-pc-linux-gnu";
 CLANG_ROOT :: "/usr/lib/clang";
@@ -162,10 +163,11 @@ dump_library_paths :: proc()
     command: cstring;
     switch sys_info.compiler
     {
-        case "gcc":   command = "gcc -print-search-dirs > lib_paths.txt";
-        case "clang": command = "clang -print-search-dirs > lib_paths.txt";
+        case "gcc":   command = "gcc -print-search-dirs > temp/lib_paths.txt";
+        case "clang": command = "clang -print-search-dirs > temp/lib_paths.txt";
     }
     
+    path.create("temp/");
     res := popen(command, "r");
     if res == nil
     {
@@ -173,10 +175,10 @@ dump_library_paths :: proc()
     }
     pclose(res);
     
-    file, ok := os.read_entire_file("./lib_paths.txt");
+    file, ok := os.read_entire_file("temp/lib_paths.txt");
     if !ok
     {
-        fmt.eprintf("ERROR: Could not open \"lib_paths.txt\"\n");
+        fmt.eprintf("ERROR: Could not open \"temp/lib_paths.txt\"\n");
     }
     
     paths: [dynamic]string;

@@ -14,6 +14,8 @@ Lib :: struct
     file: string,
     name: string,
     symbols: map[string]bool,
+    
+    from_system: bool,
 }
 
 init_lib :: proc(filepath: string) -> (lib: Lib)
@@ -29,10 +31,12 @@ get_symbols :: proc(name: string) -> Lib
 {
     path := name;
     found := false;
+    from_system := false;
     if file.exists(path) do found = true;
     
     if !found
     {
+        from_system = true;
         for d, i in sys_info.lib
         {
             path = fmt.tprintf("%s/%s", d, name);
@@ -50,5 +54,7 @@ get_symbols :: proc(name: string) -> Lib
         return Lib{};
     }
     
-    return _get_symbols(path);
+    lib := _get_symbols(path);
+    lib.from_system = from_system;
+    return lib;
 }

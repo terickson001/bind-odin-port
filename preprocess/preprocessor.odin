@@ -9,15 +9,11 @@ import "../common"
 import "../lex"
 import hs "../hide_set"
 import "../file"
+import "../lib"
+import "../config"
 
 @(private)
 Token :: lex.Token;
-
-Options :: struct
-{
-    root_dir: string,
-    include_dirs: []string,
-}
 
 Preprocessor :: struct
 {
@@ -25,12 +21,11 @@ Preprocessor :: struct
     
     tokens: ^Token,
     
+    include_dirs: []string,
     macros: map[string]Macro,
     pragma_onces: map[string]b32,
     conditionals: ^Conditional,
     counter: u64,
-    
-    using opt: Options,
 }
 
 Macro_Arg :: struct
@@ -59,11 +54,14 @@ Conditional :: struct
     skip_else: bool,
 }
 
-make_preprocessor :: proc(opt: Options) -> ^Preprocessor
+make_preprocessor :: proc() -> ^Preprocessor
 {
     pp := new(Preprocessor);
     
-    pp.opt = opt;
+    // pp.opt = opt;
+    pp.include_dirs = make([]string, len(config.global_config.include_dirs) + len(lib.sys_info.include));
+    copy(pp.include_dirs, config.global_config.include_dirs);
+    copy(pp.include_dirs[len(config.global_config.include_dirs):], lib.sys_info.include);
     
     token_pool := mem.Dynamic_Pool{};
     mem.dynamic_pool_init(&token_pool);
@@ -88,7 +86,7 @@ preprocess_file :: proc(using pp: ^Preprocessor, file: string) -> (^Token, bool)
 {
     ok: bool;
     buf: [1024]byte;
-    path := fmt.bprintf(buf[:], "%s/%s", root_dir, file);
+    path := fmt.bprintf(buf[:], "%s/%s", config.global_config.root, file);
     tokens, ok = lex.lex_file(path, list_allocator);
     if !ok
     {
@@ -193,6 +191,7 @@ try_special_macro :: proc(using pp: ^Preprocessor) -> bool
     tokens = res;
     return true;
 }
+
 try_expand_macro :: proc(using pp: ^Preprocessor) -> bool
 {
     if try_special_macro(pp) do return true;
@@ -231,7 +230,8 @@ try_expand_macro :: proc(using pp: ^Preprocessor) -> bool
         }
         
         //  Substitute for parameters in body
-        body = insert_macro_args(pp, macro.body, args);
+        //fmt.printf("%#v\n", macro);
+        body = insert_macro_args(pp, macro.body, args, macro.name.text);
     }
     else
     {
@@ -261,7 +261,7 @@ try_expand_macro :: proc(using pp: ^Preprocessor) -> bool
     return true;
 }
 
-insert_macro_args :: proc(using pp: ^Preprocessor, body: ^Token, args: ^Macro_Arg) -> ^Token
+insert_macro_args :: proc(using pp: ^Preprocessor, body: ^Token, args: ^Macro_Arg, name: string) -> ^Token
 {
     ret: Token;
     curr := &ret;
@@ -285,7 +285,9 @@ insert_macro_args :: proc(using pp: ^Preprocessor, body: ^Token, args: ^Macro_Ar
             tok = tok.next;
             str := lex.clone_token(hash, list_allocator);
             str.kind = .String;
-            str.text = lex.token_list_string(arg.value, true);
+            token_str := lex.token_list_string(arg.value, true);
+            str.text = fmt.aprintf("%q", token_str);
+            delete(token_str);
             curr.next = str;
             curr = curr.next;
             
@@ -340,8 +342,9 @@ insert_macro_args :: proc(using pp: ^Preprocessor, body: ^Token, args: ^Macro_Ar
             }
             else
             {
+                start := curr;
                 curr.next = appendix.next;
-                curr = curr.next;
+                for curr.next != nil do curr = curr.next;
             }
             
             case .Comma:
@@ -639,7 +642,7 @@ search_includes :: proc(using pp: ^Preprocessor, filename: string, local_first: 
     
     if local_first
     {
-        path = fmt.tprintf("%s/%s", root_dir, filename);
+        path = fmt.tprintf("%s/%s", config.global_config.root, filename);
         if file.exists(path) do found_in = 0;
     }
     if found_in == -1

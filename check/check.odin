@@ -7,6 +7,7 @@ import "core:c"
 import "../lex"
 import "../ast"
 import "../type"
+import "../config"
 
 @private
 Token :: lex.Token;
@@ -48,12 +49,19 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node)
             for var := v.var_list; var != nil; var = var.next
             {
                 name := ast.var_ident(var);
-                symbol := ast.make_symbol(name, var);
-                symbol.uid = sym_id;
-                sym_id += 1;
-                symbol.kind = .Type;
-                // fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
-                symbols[name] = symbol;
+                if name not_in symbols
+                {
+                    symbol := ast.make_symbol(name, var);
+                    symbol.uid = sym_id;
+                    sym_id += 1;
+                    symbol.kind = .Type;
+                    // fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
+                    symbols[name] = symbol;
+                }
+                else
+                {
+                    var.symbol = symbols[name];
+                }
                 
                 
                 name = "";
@@ -68,67 +76,117 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node)
                     if r.name != nil do name = fmt.aprintf("enum %s", ast.ident(r.name));
                 }
                 if name == "" do continue;
-                symbol = ast.make_symbol(name, base);
+                if name not_in symbols
+                {
+                    symbol := ast.make_symbol(name, base);
+                    symbol.uid = sym_id;
+                    sym_id += 1;
+                    symbol.kind = .Type;
+                    // fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
+                    symbols[name] = symbol;
+                }
+                else
+                {
+                    base.symbol = symbols[name];
+                }
+            }
+            
+            case ast.Var_Decl:
+            name := ast.var_ident(decl);
+            if name not_in symbols
+            {
+                symbol := ast.make_symbol(name, decl);
+                symbol.uid = sym_id;
+                sym_id += 1;
+                symbol.kind = .Var;
+                // fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
+                symbols[name] = symbol;
+            }
+            else
+            {
+                decl.symbol = symbols[name];
+            }
+            
+            case ast.Function_Decl:
+            name := ast.ident(v.name);
+            if name not_in symbols
+            {
+                symbol := ast.make_symbol(name, decl);
+                symbol.uid = sym_id;
+                sym_id += 1;
+                symbol.kind = .Func;
+                // fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
+                symbols[name] = symbol;
+            }
+            else
+            {
+                decl.symbol = symbols[name];
+            }
+            
+            case ast.Struct_Type:
+            assert(v.name != nil);
+            // if v.name == nil do continue;
+            name := fmt.aprintf("struct %s", ast.ident(v.name));
+            if name not_in symbols
+            {
+                symbol := ast.make_symbol(name, decl);
                 symbol.uid = sym_id;
                 sym_id += 1;
                 symbol.kind = .Type;
                 // fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
                 symbols[name] = symbol;
             }
-            
-            case ast.Var_Decl:
-            name := ast.var_ident(decl);
-            symbol := ast.make_symbol(name, decl);
-            symbol.uid = sym_id;
-            sym_id += 1;
-            symbol.kind = .Var;
-            // fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
-            symbols[name] = symbol;
-            
-            case ast.Function_Decl:
-            name := ast.ident(v.name);
-            symbol := ast.make_symbol(name, decl);
-            symbol.uid = sym_id;
-            sym_id += 1;
-            symbol.kind = .Func;
-            // fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
-            symbols[name] = symbol;
-            
-            case ast.Struct_Type:
-            assert(v.name != nil);
-            // if v.name == nil do continue;
-            name := fmt.aprintf("struct %s", ast.ident(v.name));
-            symbol := ast.make_symbol(name, decl);
-            symbol.uid = sym_id;
-            sym_id += 1;
-            symbol.kind = .Type;
-            // fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
-            symbols[name] = symbol;
-            
+            else
+            {
+                decl.symbol = symbols[name];
+            }
             
             case ast.Union_Type:
             assert(v.name != nil);
             // if v.name == nil do continue;
             name := fmt.aprintf("union %s", ast.ident(v.name));
-            symbol := ast.make_symbol(name, decl);
-            symbol.uid = sym_id;
-            sym_id += 1;
-            symbol.kind = .Type;
-            // fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
-            symbols[name] = symbol;
+            if name not_in symbols
+            {
+                symbol := ast.make_symbol(name, decl);
+                symbol.uid = sym_id;
+                sym_id += 1;
+                symbol.kind = .Type;
+                // fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
+                symbols[name] = symbol;
+            }
+            else
+            {
+                decl.symbol = symbols[name];
+            }
             
             case ast.Enum_Type:
-            assert(v.name != nil);
-            // if v.name == nil do continue;
-            name := fmt.aprintf("enum %s", v.name);
-            symbol := ast.make_symbol(name, decl);
-            symbol.uid = sym_id;
-            sym_id += 1;
-            symbol.kind = .Type;
-            // fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
-            symbols[name] = symbol;
+            name: string;
+            if v.name == nil do name = fmt.aprintf("enum $%d", sym_id);
+            else do name = fmt.aprintf("enum %s", v.name);
+            if name not_in symbols
+            {
+                symbol := ast.make_symbol(name, decl);
+                symbol.uid = sym_id;
+                sym_id += 1;
+                symbol.kind = .Type;
+                // fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
+                symbols[name] = symbol;
+            }
+            else
+            {
+                decl.symbol = symbols[name];
+            }
         }
     }
+}
+
+is_exported :: proc(sym: ^Symbol) -> bool
+{
+    for l in config.global_config.libs
+    {
+        if sym.name in l.symbols do return true;
+    }
+    return false;
 }
 
 import "core:strings"
@@ -139,9 +197,13 @@ check_file :: proc(using c: ^Checker, file: ast.File)
     for decl := file.decls; decl != nil; decl = decl.next
     {
         loc := ast.node_location(decl);
-        if !strings.has_prefix(loc.filename, "/usr/include/X11") do continue;
+        if decl.symbol != nil && !is_exported(decl.symbol) do continue;
         
-        check_declaration(c, decl);
+        switch v in decl.derived
+        {
+            case ast.Function_Decl: check_declaration(c, decl);
+            case ast.Var_Decl: check_declaration(c, decl);
+        }
     }
 }
 
@@ -166,10 +228,10 @@ check_declaration :: proc(using c: ^Checker, decl: ^Node)
                 decl.symbol.type = decl.type;
             }
         }
+        
         case ast.Typedef:
         for var := v.var_list; var != nil; var = var.next
         {
-            // fmt.printf("TYPEDEF: %q\n", ast.var_ident(var));
             check_type(c, var.derived.(ast.Var_Decl).type_expr);
             assert(var.derived.(ast.Var_Decl).type_expr.type != nil);
             var.type = type.named_type(ast.var_ident(var), var.derived.(ast.Var_Decl).type_expr.type);

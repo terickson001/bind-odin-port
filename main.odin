@@ -11,39 +11,63 @@ import "parse"
 import "check"
 import "print"
 import "lib"
+import "config"
+import "path"
 
 main :: proc()
 {
-    opt := pp.Options{
-        root_dir = "/usr/include/X11",
-        //root_dir = ".",
+    // Init
+    config.global_config = {
+        // General
+        root = "/usr/include/X11",
+        files = []string{"Xlib.h", "Xutil.h", "Xos.h", "Xatom.h"},
+        output = "out/",
+        
+        // Preprocess
+        include_dirs = []string{"include"},
+        
+        // Bind
+        package_name = "xlib",
+        libraries = []string{"libX11.so"},
+        use_cstring = true,
+        separate_output = false,
+        
+        var_prefix   = "X",
+        type_prefix  = "X",
+        proc_prefix  = "X",
+        const_prefix = "X",
     };
+    
     lib.init_system_directories();
-    opt.include_dirs = make([]string, len(lib.sys_info.include)+1);
-    opt.include_dirs[0] = "include";
-    copy(opt.include_dirs[1:], lib.sys_info.include[:]);
+    libs: [dynamic]lib.Lib;
+    for l in config.global_config.libraries
+    {
+        append(&libs, lib.get_symbols(l));
+    }
+    config.global_config.libs = libs[:];
     
-    preprocessor := pp.make_preprocessor(opt);
-    predef_ok := pp.get_predefined_macros(preprocessor, lib.sys_info);
-    out, ok := pp.preprocess_file(preprocessor, "Xlib.h");
-    print_tokens("temp.pp", out);
-    
-    
-    
-    parser := parse.make_parser(out);
-    parse.parse_file(&parser);
-    /*
-        for n := parser.file.decls; n != nil; n = n.next
-        {
-            fmt.println(n.derived);
-        }
-    */
     checker: check.Checker;
-    check.check_file(&checker, parser.file);
+    for file in config.global_config.files
+    {
+        // Preprocess
+        preprocessor := pp.make_preprocessor();
+        predef_ok := pp.get_predefined_macros(preprocessor, lib.sys_info);
+        out, ok := pp.preprocess_file(preprocessor, file);
+        pp_filepath := fmt.tprintf("temp/%s.pp", file);
+        path.create(pp_filepath);
+        print_tokens(pp_filepath, out);
+        
+        // Parse
+        parser := parse.make_parser(out);
+        parse.parse_file(&parser);
+        
+        // Check
+        
+        check.check_file(&checker, parser.file);
+    }
     
-    printer := print.make_printer("out/out.odin", parser.file, checker.symbols);
-    library := lib.get_symbols("libX11.so");
-    printer.libs = []lib.Lib{library};
+    // Print
+    printer := print.make_printer(checker.symbols);
     print.print_file(&printer);
 }
 

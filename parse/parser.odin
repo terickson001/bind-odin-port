@@ -139,6 +139,7 @@ parse_string :: proc(using p: ^Parser) -> ^Node
     using strings;
     
     b := make_builder();
+    write_byte(&b, '"');
     token := expect(p, .String);
     start := token;
     for token != nil
@@ -146,6 +147,7 @@ parse_string :: proc(using p: ^Parser) -> ^Node
         write_string(&b, token.text[1:len(token.text)-1]);
         token = allow(p, .String);
     }
+    write_byte(&b, '"');
     
     token = lex.clone_token(start);
     token.next = start.next;
@@ -871,6 +873,13 @@ parse_type_spec :: proc(using p: ^Parser, var_name: ^^Node, cc: ^^Token) -> ^Nod
         
         case .___attribute__:
         for tokens.kind == .___attribute__ do parse_attributes(p);
+        
+        case .___asm__:
+        advance(p);
+        expect(p, .OpenParen);
+        parse_string(p);
+        expect(p, .CloseParen);
+        
         return parse_type_spec(p, var_name, cc);
     }
     
@@ -957,6 +966,12 @@ parse_decl :: proc(using p: ^Parser, var_kind: ast.Var_Decl_Kind) -> ^Node
             case .___attribute__:
             for tokens.kind == .___attribute__ do parse_attributes(p);
             
+            case .___asm__:
+            advance(p);
+            expect(p, .OpenParen);
+            parse_string(p);
+            expect(p, .CloseParen);
+            
             case ._static:
             if static do lex.error(tokens, "declaration has already been declared static");
             static = true;
@@ -1004,7 +1019,26 @@ parse_decl :: proc(using p: ^Parser, var_kind: ast.Var_Decl_Kind) -> ^Node
         }
     }
     
-    for tokens.kind == .___attribute__ do parse_attributes(p);
+    loop2: for
+    {
+        #partial switch tokens.kind
+        {
+            case .___declspec:
+            parse_decl_spec(p);
+            
+            case .___attribute__:
+            for tokens.kind == .___attribute__ do parse_attributes(p);
+            
+            case .___asm__:
+            expect(p, .___asm__);
+            expect(p, .OpenParen);
+            parse_string(p);
+            expect(p, .CloseParen);
+            
+            case: break loop2;
+        }
+    }
+    
     
     switch v in type.derived
     {

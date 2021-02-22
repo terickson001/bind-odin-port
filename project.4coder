@@ -23,27 +23,27 @@ load_paths = {
 command_list = {
  { .name = "Run Debug",
    .out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
-   .cmd = { {"odin run . -debug", .os ="win"},
-            {"odin run . -debug", .os ="linux"},
-            {"odin run . -debug", .os ="mac"  }, }, },
+   .cmd = { {"odin run test -debug -out:test/bind", .os ="win"},
+            {"odin run test -debug -out:test/bind", .os ="linux"},
+            {"odin run test -debug -out:test/bind", .os ="mac"  }, }, },
 
  { .name = "Build Debug",
    .out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
-   .cmd = { {"odin build . -debug", .os ="win"},
-            {"odin build . -debug", .os ="linux"},
-            {"odin build . -debug", .os ="mac"  }, }, },
+   .cmd = { {"odin build test -debug -out:test/bind", .os ="win"},
+            {"odin build test -debug -out:test/bind", .os ="linux"},
+            {"odin build test -debug -out:test/bind", .os ="mac"  }, }, },
 
 { .name = "Run Release",
    .out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
-   .cmd = { {"odin run . -opt:3", .os ="win"},
-            {"odin run . -opt:3", .os ="linux"},
-            {"odin run . -opt:3", .os ="mac"  }, }, },
+   .cmd = { {"odin run test -opt:3 -out:test/bind", .os ="win"},
+            {"odin run test -opt:3 -out:test/bind", .os ="linux"},
+            {"odin run test -opt:3 -out:test/bind", .os ="mac"  }, }, },
 
  { .name = "Build Release",
    .out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
-   .cmd = { {"odin build . -opt:3", .os ="win"},
-            {"odin build . -opt:3", .os ="linux"},
-            {"odin build . -opt:3", .os ="mac"  }, }, },
+   .cmd = { {"odin build test -opt:3 -out:test/bind", .os ="win"},
+            {"odin build test -opt:3 -out:test/bind", .os ="linux"},
+            {"odin build test -opt:3 -out:test/bind", .os ="mac"  }, }, },
 };
 
 fkey_command[1] = "Run Debug";

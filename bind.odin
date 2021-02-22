@@ -1,9 +1,8 @@
-package main
+package bind
 
 import "core:fmt"
-import "core:mem"
-import "core:os"
 import "core:strings"
+import "core:os"
 
 import "lex"
 import pp "preprocess"
@@ -14,29 +13,14 @@ import "lib"
 import "config"
 import "path"
 
-main :: proc()
+Config :: config.Config;
+generate :: proc(user_config: Config)
 {
-    // Init
-    config.global_config = {
-        // General
-        root = "/usr/include/X11",
-        files = []string{"Xlib.h", "Xutil.h", "Xos.h", "Xatom.h"},
-        output = "out/",
-        
-        // Preprocess
-        include_dirs = []string{"include"},
-        
-        // Bind
-        package_name = "xlib",
-        libraries = []string{"libX11.so"},
-        use_cstring = true,
-        separate_output = false,
-        
-        var_prefix   = "X",
-        type_prefix  = "X",
-        proc_prefix  = "X",
-        const_prefix = "X",
-    };
+    user_config := user_config;
+    if user_config.root == "" do user_config.root = ".";
+    if user_config.output == "" do user_config.output = ".";
+    
+    config.global_config = user_config;
     
     lib.init_system_directories();
     libs: [dynamic]lib.Lib;

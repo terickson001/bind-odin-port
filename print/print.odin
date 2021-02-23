@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:os"
 import "core:c"
 import "core:slice"
+import "core:strings"
 
 import "../ast"
 import "../lex"
@@ -11,7 +12,6 @@ import "../type"
 import "../lib"
 import "../config"
 import "../path"
-
 @private
 Token :: lex.Token;
 @private
@@ -26,6 +26,7 @@ Printer :: struct
     symbols: map[string]^Symbol,
     
     out: os.Handle,
+    outb: strings.Builder,
     
     proc_link_padding: int,
     proc_name_padding: int,
@@ -75,11 +76,20 @@ Printer :: struct
     "uint32_t" = "u32",
     "uint64_t" = "u64",
     
-    "size_t" = "uintptr",
-    "isize_t" = "intptr",
+    "size_t" = "uint",
+    "ssize_t" = "int",
+    "ptrdiff_t" = "int",
     
+    "uintptr_t" = "uintptr",
+    "intptr_t"  = "int",
     "wchar_t" = "_c.wchar_t"
 };
+
+pprintf :: proc(using p: ^Printer, fmt_str: string, args: ..any)
+{
+    // fmt.fprintf(out, fmt_str, ..args);
+    strings.write_string(&outb, fmt.tprintf(fmt_str, ..args));
+}
 
 make_printer :: proc(symbols: map[string]^Symbol) -> Printer
 {
@@ -146,18 +156,27 @@ print_symbols :: proc(using p: ^Printer, filepath: string, syms: []^Symbol)
     fmt.printf("%s: %d Symbols\n", filepath, len(syms));
     path.create(filepath);
     err: os.Errno;
-    p.out, err = os.open(filepath, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0o644);
-    if err != os.ERROR_NONE
+    /*
+        p.out, err = os.open(filepath, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0o644);
+        if err != os.ERROR_NONE
+        {
+            fmt.eprintf("Could not open file %q\n", filepath);
+            os.exit(1);
+        }
+        defer os.close(p.out);
+    */
+    
+    outb = strings.make_builder();
+    defer 
     {
-        fmt.eprintf("Could not open file %q\n", filepath);
-        os.exit(1);
+        os.write_entire_file(filepath, transmute([]byte)strings.to_string(outb));
+        strings.destroy_builder(&outb);
     }
-    defer os.close(p.out);
     
     slice.sort_by(syms, symbol_compare);
     set_padding(p, syms);
     
-    fmt.fprintf(out, "package %s\n\nimport _c \"core:c\"\n\n", config.global_config.package_name);
+    pprintf(p, "package %s\n\nimport _c \"core:c\"\n\n", config.global_config.package_name);
     
     for sym in syms
     {
@@ -186,29 +205,29 @@ print_symbols :: proc(using p: ^Printer, filepath: string, syms: []^Symbol)
         }
         if !has_exports do continue;
         
-        fmt.fprintf(out, "\n/***** %s *****/\n", l.name);
+        pprintf(p, "\n/***** %s *****/\n", l.name);
         if l.from_system
         {
-            fmt.fprintf(out, "foreign import %s \"system:%s\"\n\n", l.name, l.file);
+            pprintf(p, "foreign import %s \"system:%s\"\n\n", l.name, l.file);
         }
         else
         {
-            fmt.fprintf(out, "foreign import %s \"%s\"\n\n", l.name, l.path);
+            pprintf(p, "foreign import %s \"%s\"\n\n", l.name, l.path);
         }
-        fmt.fprintf(out, "/* Variables */\n");
-        fmt.fprintf(out, "foreign %s {{\n", l.name);
+        pprintf(p, "/* Variables */\n");
+        pprintf(p, "foreign %s {{\n", l.name);
         for sym in syms
         {
             if sym.kind == .Var && sym.name in l.symbols do print_node(p, sym.decl, 1, true, false);
         }
         
-        fmt.fprintf(out, "}\n\n/* Procedures */\n");
-        fmt.fprintf(out, "foreign %s {{\n", l.name);
+        pprintf(p, "}\n\n/* Procedures */\n");
+        pprintf(p, "foreign %s {{\n", l.name);
         for sym in syms
         {
             if sym.kind == .Func && sym.name in l.symbols do print_node(p, sym.decl, 1, true, false);
         }
-        fmt.fprintf(out, "}\n\n");
+        pprintf(p, "}\n\n");
     }
 }
 
@@ -240,7 +259,7 @@ print_file :: proc(using p: ^Printer)
 
 print_indent :: proc(using p: ^Printer, indent: int)
 {
-    for _ in 0..<indent do fmt.fprintf(out, "    ");
+    for _ in 0..<indent do pprintf(p, "    ");
 }
 
 print_string :: proc(using p: ^Printer, str: string, indent: int, padding := 0)
@@ -249,8 +268,8 @@ print_string :: proc(using p: ^Printer, str: string, indent: int, padding := 0)
     str := str;
     rename, found := renamed_idents[str];
     if found do str = rename;
-    if padding != 0 do fmt.fprintf(out, "%*s", padding, str);
-    else do fmt.fprintf(out, "%s", str);
+    if padding != 0 do pprintf(p, "%*s", padding, str);
+    else do pprintf(p, "%s", str);
 }
 
 print_ident :: proc(using p: ^Printer, node: ^Node, indent: int, padding := 0)
@@ -267,24 +286,24 @@ print_node :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: bool,
         
         case ast.Function_Decl:
         print_function(p, node, indent_first?indent:0);
-        fmt.fprintf(out, ";\n");
+        pprintf(p, ";\n");
         
         case ast.Var_Decl:
         print_variable(p, node, indent, top_level, 0);
-        if top_level do fmt.fprintf(out, ";\n");
-        if v.kind == .Typedef do fmt.fprintf(out, "\n");
+        if top_level do pprintf(p, ";\n");
+        if v.kind == .Typedef do pprintf(p, "\n");
         
         case ast.Struct_Type:
         print_record(p, node, indent, top_level, indent_first);
-        if top_level do fmt.fprintf(out, ";\n\n");
+        if top_level do pprintf(p, ";\n\n");
         
         case ast.Union_Type:
         print_record(p, node, indent, top_level, indent_first);
-        if top_level do fmt.fprintf(out, ";\n\n");
+        if top_level do pprintf(p, ";\n\n");
         
         case ast.Enum_Type:
         print_record(p, node, indent, top_level, indent_first);
-        if top_level do fmt.fprintf(out, ";\n\n");
+        if top_level do pprintf(p, ";\n\n");
     }
 }
 
@@ -296,18 +315,18 @@ print_function :: proc(using p: ^Printer, node: ^Node, indent: int)
     name_padding := proc_name_padding;
     
     print_string(p, name, 0, name_padding);
-    fmt.fprintf(out, " :: proc");
+    pprintf(p, " :: proc");
     print_calling_convention(p, node.derived.(ast.Function_Decl).type_expr.derived.(ast.Function_Type).callconv);
     print_function_parameters(p, node.derived.(ast.Function_Decl).type_expr.derived.(ast.Function_Type).params);
     
     ret_type := node.derived.(ast.Function_Decl).type_expr.derived.(ast.Function_Type).ret_type;
     if ret_type.type != &type.type_void
     {
-        fmt.fprintf(out, " -> ");
+        pprintf(p, " -> ");
         print_type(p, ret_type, 0);
     }
     
-    fmt.fprintf(out, " ---");
+    pprintf(p, " ---");
 }
 
 print_calling_convention :: proc(using p: ^Printer, cc: ^Token)
@@ -316,18 +335,18 @@ print_calling_convention :: proc(using p: ^Printer, cc: ^Token)
     #partial switch cc.kind
     {
         case .___stdcall:
-        fmt.fprintf(out, " \"stdcall\" ");
+        pprintf(p, " \"stdcall\" ");
         case .___fastcall:
-        fmt.fprintf(out, " \"fastcall\" ");
+        pprintf(p, " \"fastcall\" ");
         case .___cdecl:
-        fmt.fprintf(out, " \"c\" ");
+        pprintf(p, " \"c\" ");
     }
 }
 
 print_function_parameters :: proc(using p: ^Printer, node: ^Node)
 {
-    fmt.fprintf(out, "(");
-    defer fmt.fprintf(out, ")");
+    pprintf(p, "(");
+    defer pprintf(p, ")");
     
     if node == nil do return;
     if node.next == nil && node.type == &type.type_void do return;
@@ -352,9 +371,9 @@ print_function_parameters :: proc(using p: ^Printer, node: ^Node)
             else do print_type(p, n.derived.(ast.Var_Decl).type_expr, 0);
             
             case .VaArgs:
-            fmt.fprintf(out, "#c_vararg %s..any", use_param_names?"__args : ":string{});
+            pprintf(p, "#c_vararg %s..any", use_param_names?"__args : ":string{});
         }
-        if n.next != nil do fmt.fprintf(out, ", ");
+        if n.next != nil do pprintf(p, ", ");
     }
 }
 
@@ -373,25 +392,25 @@ print_type :: proc(using p: ^Printer, node: ^Node, indent: int)
         case ast.Ident:         print_ident(p, node, indent);
         case ast.Numeric_Type:  
         print_indent(p, indent);
-        fmt.fprintf(out, "_c.%s", v.name);
+        pprintf(p, "_c.%s", v.name);
         
         case ast.Pointer_Type:
         // if ast.node_token(v.type_expr).text == "Uint8" do fmt.println(v.type_expr.derived);
         if node.type == type_rawptr
         {
-            fmt.fprintf(out, "rawptr");
+            pprintf(p, "rawptr");
             break;
         }
         else if config.global_config.use_cstring && node.type == type_cstring
         {
-            fmt.fprintf(out, "cstring");
+            pprintf(p, "cstring");
             break;
         }
         #partial switch _ in v.type_expr.type.variant
         {
             case type.Func: print_function_type(p, v.type_expr, 0);
             case: 
-            fmt.fprintf(out, "^");
+            pprintf(p, "^");
             print_type(p, v.type_expr, 0);
         }
     }
@@ -399,9 +418,9 @@ print_type :: proc(using p: ^Printer, node: ^Node, indent: int)
 
 print_array_type :: proc(using p: ^Printer, node: ^Node, indent: int)
 {
-    fmt.fprintf(p.out, "[");
+    pprintf(p, "[");
     print_expr(p, node.derived.(ast.Array_Type).count, 0);
-    fmt.fprintf(p.out, "]");
+    pprintf(p, "]");
     print_type(p, node.derived.(ast.Array_Type).type_expr, 0);
 }
 
@@ -412,15 +431,15 @@ print_function_type :: proc(using p: ^Printer, node: ^Node, indent: int)
     ret_type := node.derived.(ast.Function_Type).ret_type;
     ret_void := ret_type != nil && ret_type.type == &type.type_void;
     
-    fmt.fprintf(out, "%sproc", ret_void?string{}:"(");
+    pprintf(p, "%sproc", ret_void?string{}:"(");
     print_calling_convention(p, node.derived.(ast.Function_Type).callconv);
     print_function_parameters(p, node.derived.(ast.Function_Type).params);
     
     if !ret_void
     {
-        fmt.fprintf(out, " -> ");
+        pprintf(p, " -> ");
         print_type(p, ret_type, 0);
-        fmt.fprintf(out, ")");
+        pprintf(p, ")");
     }
 }
 
@@ -449,9 +468,9 @@ print_ternary_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
 {
     v := node.derived.(ast.Ternary_Expr);
     print_expr(p, v.cond, indent);
-    fmt.fprintf(out, " ? ");
+    pprintf(p, " ? ");
     print_expr(p, v.then, 0);
-    fmt.fprintf(out, " : ");
+    pprintf(p, " : ");
     print_expr(p, v.els_, 0);
 }
 
@@ -461,11 +480,11 @@ print_binary_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
     print_expr(p, v.lhs, indent);
     if v.op.kind != .Xor
     {
-        fmt.fprintf(out, " %s ", v.op.text);
+        pprintf(p, " %s ", v.op.text);
     }
     else
     {
-        fmt.fprintf(out, " ~ ");
+        pprintf(p, " ~ ");
     }
     print_expr(p, v.rhs, 0);
 }
@@ -473,7 +492,7 @@ print_binary_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
 print_unary_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
 {
     v := node.derived.(ast.Unary_Expr);
-    fmt.fprintf(out, "%s", v.op.text);
+    pprintf(p, "%s", v.op.text);
     print_expr(p, v.operand, 0);
 }
 
@@ -482,39 +501,39 @@ print_cast_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
     v := node.derived.(ast.Cast_Expr);
     _, has_parens := v.expr.derived.(ast.Paren_Expr);
     print_indent(p, indent);
-    fmt.fprintf(out, "(");
+    pprintf(p, "(");
     print_type(p, v.type_expr, 0);
-    fmt.fprintf(out, ")");
-    if !has_parens do fmt.fprintf(out, "(");
+    pprintf(p, ")");
+    if !has_parens do pprintf(p, "(");
     print_expr(p, v.expr, 0);
-    if !has_parens do fmt.fprintf(out, ")");
+    if !has_parens do pprintf(p, ")");
 }
 
 print_paren_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
 {
     v := node.derived.(ast.Paren_Expr);
     print_indent(p, indent);
-    fmt.fprintf(out, "(");
+    pprintf(p, "(");
     print_expr(p, v.expr, 0);
-    fmt.fprintf(out, ")");
+    pprintf(p, ")");
 }
 
 print_index_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
 {
     v := node.derived.(ast.Index_Expr);
     print_expr(p, v.expr, indent);
-    fmt.fprintf(out, "[");
+    pprintf(p, "[");
     print_expr(p, v.index, 0);
-    fmt.fprintf(out, "]");
+    pprintf(p, "]");
 }
 
 print_call_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
 {
     v := node.derived.(ast.Call_Expr);
     print_expr(p, v.func, indent);
-    fmt.fprintf(out, "(");
+    pprintf(p, "(");
     print_expr_list(p, v.args, 0);
-    fmt.fprintf(out, ")");
+    pprintf(p, ")");
 }
 
 print_expr_list :: proc(using p: ^Printer, node: ^Node, indent: int)
@@ -523,7 +542,7 @@ print_expr_list :: proc(using p: ^Printer, node: ^Node, indent: int)
     for n := node; n != nil; n = n.next
     {
         print_expr(p, n, indent);
-        if n.next != nil do fmt.fprintf(out, ", ");
+        if n.next != nil do pprintf(p, ", ");
         indent = 0;
     }
 }
@@ -532,7 +551,7 @@ print_inc_dec_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
 {
     v := node.derived.(ast.Inc_Dec_Expr);
     print_expr(p, v.expr, indent);
-    fmt.fprintf(out, "%s", v.op.text);
+    pprintf(p, "%s", v.op.text);
 }
 
 print_record :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: bool, indent_first: bool)
@@ -555,7 +574,7 @@ print_record :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: boo
         case ast.Enum_Type:
         if v.name != nil do name = ast.ident(v.name);
         fields = v.fields;
-        fmt.fprintf(out, "/* ");
+        pprintf(p, "/* ");
         is_enum = true;
     }
     
@@ -564,7 +583,7 @@ print_record :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: boo
         if top_level 
         {
             print_string(p, name, 0);
-            fmt.fprintf(out, " :: ");
+            pprintf(p, " :: ");
         }
         else if fields == nil
         {
@@ -574,21 +593,21 @@ print_record :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: boo
     }
     else if is_enum
     {
-        fmt.fprintf(out, "using _ :: ");
+        pprintf(p, "using _ :: ");
     }
     
     switch v in node.derived
     {
-        case ast.Struct_Type: fmt.fprintf(out, "struct");
-        case ast.Union_Type:  fmt.fprintf(out, "struct #raw_union");
-        case ast.Enum_Type:   fmt.fprintf(out, "enum");
+        case ast.Struct_Type: pprintf(p, "struct");
+        case ast.Union_Type:  pprintf(p, "struct #raw_union");
+        case ast.Enum_Type:   pprintf(p, "enum");
     }
     
-    fmt.fprintf(out, " {{");
-    if is_enum do fmt.fprintf(out, " */");
+    pprintf(p, " {{");
+    if is_enum do pprintf(p, " */");
     if fields != nil
     {
-        fmt.fprintf(out, "\n");
+        pprintf(p, "\n");
         switch v in node.derived
         {
             case ast.Struct_Type: print_struct_fields(p, fields, indent+1, v.only_bitfield);
@@ -598,9 +617,9 @@ print_record :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: boo
     }
     
     print_indent(p, indent);
-    if is_enum do fmt.fprintf(out, "/* ");
-    fmt.fprintf(out, "}");
-    if is_enum do fmt.fprintf(out, " */");
+    if is_enum do pprintf(p, "/* ");
+    pprintf(p, "}");
+    if is_enum do pprintf(p, " */");
 }
 
 print_struct_fields :: proc(using p: ^Printer, node: ^Node, indent: int, only_bitfield: bool)
@@ -622,7 +641,7 @@ print_struct_fields :: proc(using p: ^Printer, node: ^Node, indent: int, only_bi
             if !in_bitfield && bitfield
             {
                 print_indent(p, indent);
-                fmt.fprintf(out, "using ) : bit_field {\n");
+                pprintf(p, "using ) : bit_field {\n");
                 in_bitfield = true;
                 indent += 1;
             }
@@ -630,12 +649,12 @@ print_struct_fields :: proc(using p: ^Printer, node: ^Node, indent: int, only_bi
             {
                 indent -= 1;
                 print_indent(p, indent);
-                fmt.fprintf(out, "},\n");
+                pprintf(p, "},\n");
                 in_bitfield = false;
             }
         }
         print_variable(p, n, indent, false, field_padding);
-        fmt.fprintf(out, ",\n");
+        pprintf(p, ",\n");
     }
 }
 
@@ -650,7 +669,7 @@ print_union_fields :: proc(using p: ^Printer, node: ^Node, indent: int)
     for n := node; n != nil; n = n.next
     {
         print_variable(p, n, indent, false, field_padding);
-        fmt.fprintf(out, ",\n");
+        pprintf(p, ",\n");
     }
 }
 
@@ -668,7 +687,7 @@ print_enum_fields :: proc(using p: ^Printer, node: ^Node, indent: int)
     {
         v := n.derived.(ast.Enum_Field);
         print_ident(p, v.name, 0, field_padding);
-        fmt.fprintf(out, " :: ");
+        pprintf(p, " :: ");
         if v.value != nil
         {
             print_expr(p, v.value, 0);
@@ -676,14 +695,14 @@ print_enum_fields :: proc(using p: ^Printer, node: ^Node, indent: int)
         else if prev != nil
         {
             print_ident(p, prev.derived.(ast.Enum_Field).name, 0);
-            fmt.fprintf(out, " + 1");
+            pprintf(p, " + 1");
         }
         else
         {
-            fmt.fprintf(out, "0");
+            pprintf(p, "0");
         }
         
-        fmt.fprintf(out, ";\n");
+        pprintf(p, ";\n");
         prev = n;
     }
 }
@@ -700,11 +719,11 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
         typedef = true;
         name := ast.var_ident(node);
         print_string(p, name, 0);
-        fmt.fprintf(out, " :: ");
+        pprintf(p, " :: ");
         switch t in v.type_expr.derived
         {
             case ast.Enum_Type:
-            fmt.fprintf(out, "_c.int;\n");
+            pprintf(p, "_c.int;\n");
             if t.fields != nil
             {
                 print_type(p, v.type_expr, 0);
@@ -719,7 +738,7 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
             */
             if name == r_name && t.fields == nil && v.type_expr.symbol != nil && v.type_expr.symbol.decl.derived.(ast.Struct_Type).fields == nil
             {
-                fmt.fprintf(out, "struct {{}");
+                pprintf(p, "struct {{}");
                 return;
             }
             case ast.Union_Type:
@@ -730,7 +749,7 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
             */
             if name == r_name && t.fields == nil && v.type_expr.symbol != nil && v.type_expr.symbol.decl.derived.(ast.Struct_Type).fields == nil
             {
-                fmt.fprintf(out, "union {{}");
+                pprintf(p, "union {{}");
                 return;
             }
         }
@@ -739,7 +758,7 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
         if !top_level do break;
         name := ast.var_ident(node);
         print_string(p, name, 0, p.var_name_padding);
-        fmt.fprintf(out, " : ");
+        pprintf(p, " : ");
         
         case .Field:
         name := ast.var_ident(node);
@@ -751,18 +770,18 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
             case ast.Enum_Type:   if t.fields != nil do name_padding = 1;
         }
         print_string(p, name, 0, name_padding);
-        fmt.fprintf(out, " : ");
+        pprintf(p, " : ");
         
         case .Parameter:
         name := ast.var_ident(node);
         print_string(p, name, 0);
-        fmt.fprintf(out, " : ");
+        pprintf(p, " : ");
         
         case .AnonBitfield:
-        fmt.fprintf(out, "_ : ");
+        pprintf(p, "_ : ");
         
         case .AnonRecord:
-        fmt.fprintf(out, "using _ : ");
+        pprintf(p, "using _ : ");
         
         case .VaArgs, .AnonParameter: break;
     }

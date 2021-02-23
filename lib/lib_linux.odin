@@ -5,6 +5,9 @@ import "core:os"
 import "core:mem"
 import "core:strings"
 
+SEEK_SET :: 0;
+SEEK_CUR :: 1;
+SEEK_END :: 2;
 
 _get_symbols :: proc(filepath: string) -> (lib: Lib)
 {
@@ -26,7 +29,7 @@ _get_symbols :: proc(filepath: string) -> (lib: Lib)
     
     bits: u8;
     os.read_ptr(file, &bits, 1);
-    os.seek(file, 0, os.SEEK_SET);
+    os.seek(file, 0, SEEK_SET);
     if bits == 1 do get_elf_symbols_32(file, &lib);
     else do         get_elf_symbols_64(file, &lib);
     
@@ -38,13 +41,13 @@ get_elf_symbols_64 :: proc(file: os.Handle, lib: ^Lib)
     header: ELF_Header_64;
     os.read_ptr(file, &header, size_of(header));
     
-    os.seek(file, i64(header.section_header_position), os.SEEK_SET);
+    os.seek(file, i64(header.section_header_position), SEEK_SET);
     sections := make([]ELF_Section_Header_64, header.section_header_count);
     os.read(file, mem.slice_to_bytes(sections));
     
     names_section := &sections[header.section_names_index];
     section_names := make([]u8, names_section.size);
-    os.seek(file, i64(names_section.offset), os.SEEK_SET);
+    os.seek(file, i64(names_section.offset), SEEK_SET);
     os.read(file, section_names);
     
     for s in sections
@@ -52,12 +55,12 @@ get_elf_symbols_64 :: proc(file: os.Handle, lib: ^Lib)
         if s.type != .Dyn_Sym && s.type != .Sym_Tab do continue;
         strings_section := &sections[s.link];
         string_table := make([]u8, strings_section.size);
-        os.seek(file, i64(strings_section.offset), os.SEEK_SET);
+        os.seek(file, i64(strings_section.offset), SEEK_SET);
         os.read(file, string_table);
         defer delete(string_table);
         
         symbols := make([]ELF_Symbol_64, s.size/s.entry_size);
-        os.seek(file, i64(s.offset), os.SEEK_SET);
+        os.seek(file, i64(s.offset), SEEK_SET);
         os.read(file, mem.slice_to_bytes(symbols));
         defer delete(symbols);
         
@@ -80,13 +83,13 @@ get_elf_symbols_32 :: proc(file: os.Handle, lib: ^Lib)
     header: ELF_Header_32;
     os.read_ptr(file, &header, size_of(header));
     
-    os.seek(file, i64(header.section_header_position), os.SEEK_SET);
+    os.seek(file, i64(header.section_header_position), SEEK_SET);
     sections := make([]ELF_Section_Header_32, header.section_header_count);
     os.read(file, mem.slice_to_bytes(sections));
     
     names_section := &sections[header.section_names_index];
     section_names := make([]u8, names_section.size);
-    os.seek(file, i64(names_section.offset), os.SEEK_SET);
+    os.seek(file, i64(names_section.offset), SEEK_SET);
     os.read(file, section_names);
     
     for s in sections
@@ -94,12 +97,12 @@ get_elf_symbols_32 :: proc(file: os.Handle, lib: ^Lib)
         if s.type != .Dyn_Sym && s.type != .Sym_Tab do continue;
         strings_section := &sections[s.link];
         string_table := make([]u8, strings_section.size);
-        os.seek(file, i64(strings_section.offset), os.SEEK_SET);
+        os.seek(file, i64(strings_section.offset), SEEK_SET);
         os.read(file, string_table);
         defer delete(string_table);
         
         symbols := make([]ELF_Symbol_32, s.size/s.entry_size);
-        os.seek(file, i64(s.offset), os.SEEK_SET);
+        os.seek(file, i64(s.offset), SEEK_SET);
         os.read(file, mem.slice_to_bytes(symbols));
         defer delete(symbols);
         

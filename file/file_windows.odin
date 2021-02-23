@@ -1,5 +1,5 @@
 package file
 
-import "core:filepath"
+import "core:os"
 
-exists :: proc(path: string) -> bool { return filepath.exists(path) };
+exists :: proc(path: string) -> bool { return os.exists(path); }

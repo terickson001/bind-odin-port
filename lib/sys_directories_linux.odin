@@ -15,13 +15,6 @@ import "../path"
 GCC_ROOT :: "/usr/lib/gcc/x86_64-pc-linux-gnu";
 CLANG_ROOT :: "/usr/lib/clang";
 
-System_Info :: struct
-{
-    include: []string,
-    lib: []string,
-    compiler: string,
-}
-
 init_system_directories :: proc(allocator := context.allocator)
 {
     if file.exists(GCC_ROOT)

@@ -6,6 +6,13 @@ import "core:fmt"
 import "../path"
 import "../file"
 
+System_Info :: struct
+{
+    include: []string,
+    lib: []string,
+    compiler: string,
+}
+
 @static sys_info: System_Info;
 
 Lib :: struct

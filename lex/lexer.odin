@@ -11,6 +11,10 @@ import "core:mem"
 import "../common"
 import hs "../hide_set"
 
+SEEK_SET :: 0;
+SEEK_CUR :: 1;
+SEEK_END :: 2;
+
 Lexer :: struct
 {
     data           : []byte,
@@ -39,13 +43,15 @@ make_lexer_fd :: proc(fd: os.Handle) -> (lexer: Lexer, ok: bool)
     using lexer;
     size: i64;
     err: os.Errno;
-    size, err = os.seek(fd, 0, os.SEEK_END);
+    start: i64;
+    start, err = os.seek(fd, 0, SEEK_CUR);
+    size, err = os.seek(fd, 0, SEEK_END);
     if err != os.ERROR_NONE 
     {
         fmt.println("seek:", err);
         return lexer, false;
     }
-    os.seek(fd, 0, os.SEEK_SET);
+    os.seek(fd, start, SEEK_SET);
     
     data = make([]byte, size);
     _, err = os.read(fd, data);
@@ -87,17 +93,11 @@ skip_space :: proc(using lexer: ^Lexer) -> bool
     {
         if idx >= len(data) do return false;
         
-        if strings.is_space(rune(data[idx])) && data[idx] != '\n'
+        switch data[idx]
         {
-            idx+=1;
-        }
-        else if data[idx] == '\n'
-        {
-            try_increment_line(lexer);
-        }
-        else
-        {
-            return true;
+            case ' ', '\t', '\r', '\v', '\f': idx +=1;
+            case '\n': try_increment_line(lexer);
+            case: return true;
         }
     }
     return true;
@@ -358,7 +358,7 @@ lex_line_comment :: proc(using lexer: ^Lexer) -> (token: Token)
     idx += 2; // //
     for idx < len(data) && data[idx] != '\n' do idx += 1;
     token.text = string(data[start:idx]);
-    try_increment_line(lexer);
+    // try_increment_line(lexer);
     
     return token;
 }
@@ -670,13 +670,6 @@ token_list_string :: proc(tokens: ^Token, quoted := false, allocator := context.
     idx += len(tokens.text);
     for t := tokens.next; t != nil; t = t.next
     {
-        /*
-                for _ in 0..<(t.whitespace)
-                {
-                    buf[idx] = ' ';
-                    idx += 1;
-                }
-                */
         if t.whitespace > 0
         {
             buf[idx] = ' ';

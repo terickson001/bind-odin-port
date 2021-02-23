@@ -331,7 +331,6 @@ parse_ternary_expr :: proc(pp: ^Preprocessor, expr: ^^Token, cond: ^Expr) -> ^Ex
 
 parse_unary_expr :: proc(pp: ^Preprocessor, expr: ^^Token) -> ^Expr
 {
-    //fmt.println("UNARY:", expr^);
     #partial switch (expr^).kind
     {
         case .And, .Add, .Sub,
@@ -348,7 +347,6 @@ parse_unary_expr :: proc(pp: ^Preprocessor, expr: ^^Token) -> ^Expr
 
 parse_operand :: proc(pp: ^Preprocessor, expr: ^^Token) -> ^Expr
 {
-    //fmt.println("OPERAND:", expr^);
     #partial switch (expr^).kind
     {
         case .Integer, .Char, .Wchar:

@@ -104,8 +104,17 @@ preprocess :: proc(using pp: ^Preprocessor) -> (^Token, bool)
     for tokens != nil && tokens.kind != .EOF
     {
         if try_expand_macro(pp) do continue;
-        if tokens.kind == .___pragma do __pragma(pp);
-        if tokens.kind == .__Pragma do _Pragma(pp);
+        if tokens.kind == .___pragma
+        {
+            __pragma(pp);
+            continue;
+        }
+        
+        if tokens.kind == .__Pragma 
+        {
+            _Pragma(pp);
+            continue;
+        }
         
         if !(tokens.first_on_line && tokens.kind == .Hash)
         {
@@ -195,14 +204,13 @@ try_special_macro :: proc(using pp: ^Preprocessor) -> bool
 try_expand_macro :: proc(using pp: ^Preprocessor) -> bool
 {
     if try_special_macro(pp) do return true;
-    
+    debug := false;
     // Check for macro
     if !is_valid_ident(tokens) do return false;
     if hs.contains(tokens.hide_set, tokens.text) do return false;
     macro, ok := macros[tokens.text];
     if !ok do return false;
     invocation := tokens;
-    
     // If function style:
     body: ^Token;
     if macro.params != nil
@@ -246,16 +254,13 @@ try_expand_macro :: proc(using pp: ^Preprocessor) -> bool
         }
         body = head.next;
     }
-    
     hs := hs.union_(invocation.hide_set, hs.make(invocation.text));
     lex.merge_hide_set(body, hs);
     lex.token_list_set_origin(body, invocation);
-    
     // Append body to beginning of `tokens`
     if body == nil do return true;
     end := body;
     for end.next != nil do end = end.next;
-    
     end.next = tokens;
     tokens = body;
     return true;
@@ -552,7 +557,6 @@ directive_include :: proc(using pp: ^Preprocessor)
     
     if path in pragma_onces do return;
     
-    // fmt.printf("#include: %q\n", path);
     inc_tokens, inc_ok := lex.lex_file(path, list_allocator);
     if inc_tokens == nil do return; // Empty file?
     lex.token_list_set_include(inc_tokens, idx);
@@ -610,7 +614,7 @@ read_include_path :: proc(using pp: ^Preprocessor) -> (string, bool)
         start := tokens;
         for tokens.next.kind != .Gt do tokens = tokens.next;
         end := tokens;
-        tokens = tokens.next.next; // >
+        tokens = tokens.next.next;
         filename = lex.token_run_string_unsafe(start, end);
     }
     
@@ -831,11 +835,13 @@ __pragma :: proc(using pp: ^Preprocessor)
 {
     tok := tokens;
     tokens = tokens.next; // __pragma
+    
     if tokens.kind != .OpenParen
     {
         lex.error(tokens, "Expected '(' after __pragma");
         os.exit(1);
     }
+    tokens = tokens.next;
     
     line := tokens;
     scope_level := 0;

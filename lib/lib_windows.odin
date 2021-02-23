@@ -5,8 +5,13 @@ import "core:os"
 import "core:mem"
 import "core:strings"
 import "core:strconv"
+import "core:math/bits"
 
-_get_symbols :: proc(filepath: string) -> (lib: Lib);
+SEEK_SET :: 0;
+SEEK_CUR :: 1;
+SEEK_END :: 2;
+
+_get_symbols :: proc(filepath: string) -> (lib: Lib)
 {
     file, err := os.open(filepath);
     if err != os.ERROR_NONE
@@ -24,9 +29,11 @@ _get_symbols :: proc(filepath: string) -> (lib: Lib);
     }
     else
     {
-        os.seek(file, -2, os.SEEK_CUR);
+        os.seek(file, -2, SEEK_CUR);
         get_coff_symbols_lib(file, &lib);
     }
+    
+    return lib;
 }
 
 virt_to_phys :: proc(virt: u32, sections: []Coff_Section) -> u32
@@ -48,34 +55,47 @@ get_coff_symbols_dll :: proc(file: os.Handle, lib: ^Lib)
     // Skip DOS Stub
     {
         offset: u32;
-        os.seek(file, 0x3c, os.SEEK_SET);
+        os.seek(file, 0x3c, SEEK_SET);
         os.read_ptr(file, &offset, 4);
-        os.seek(file, i64(offset), os.SEEK_SET);
+        os.seek(file, i64(offset), SEEK_SET);
+    }
+    
+    sig: [4]u8;
+    os.read(file, sig[:]);
+    if string(sig[:]) != "PE\x00\x00"
+    {
+        fmt.eprintf("ERROR: Invalid DLL signature\n");
+        return;
     }
     
     header: Coff_Header;
     opt_header: Coff_Opt;
     win_opt_header: Coff_Opt_Win;
     directories: Coff_Data_Directories;
-    os.read_ptr(file, header, size_of(header));
-    os.read_ptr(file, opt_header, size_of(opt_header));
-    os.read_ptr(file, win_opt_header, size_of(win_opt_header));
-    os.read_ptr(file, directories, win_opt_header.num_data_dirs * size_of(Image_Data_Directory));
+    os.read_ptr(file, &header, size_of(header));
+    os.read_ptr(file, &opt_header, size_of(opt_header));
+    os.read_ptr(file, &win_opt_header, size_of(win_opt_header));
+    os.read_ptr(file, &directories, int(win_opt_header.num_data_dirs * size_of(Image_Data_Directory)));
     
+    fmt.println(size_of(header));
+    fmt.println(size_of(opt_header));
+    fmt.println(size_of(win_opt_header));
+    fmt.println(size_of(Image_Data_Directory));
+    fmt.printf("0x%x\n", header.machine);
     assert(header.machine == 0x8664); // I assume this won't work for i386
-    assert(header.machine == 0x20b); // Only support PE32+ currently
+    assert(opt_header.magic == 0x20b); // Only support PE32+ currently
     
     sections := make([]Coff_Section, header.num_sections);
     os.read(file, mem.slice_to_bytes(sections));
     export_phys := virt_to_phys(directories.export.virt_address, sections);
     
     export_table: Coff_Export;
-    os.seek(file, export_phys, os.SEEK_SET);
+    os.seek(file, i64(export_phys), SEEK_SET);
     os.read_ptr(file, &export_table, size_of(export_table));
     
     name_ptr_phys := virt_to_phys(export_table.name_ptr_rva, sections);
     name_ptrs := make([]u32, export_table.num_name_ptrs);
-    os.seek(file, name_ptr_phys, os.SEEK_SET);
+    os.seek(file, i64(name_ptr_phys), SEEK_SET);
     os.read(file, mem.slice_to_bytes(name_ptrs));
     
     MAX_NAME_LENGTH :: 1024;
@@ -83,7 +103,7 @@ get_coff_symbols_dll :: proc(file: os.Handle, lib: ^Lib)
     for name in name_ptrs
     {
         phys := virt_to_phys(name, sections);
-        os.seek(file, phys, os.SEEK_SET);
+        os.seek(file, i64(phys), SEEK_SET);
         os.read(file, name_temp[:]);
         add_symbol(lib, name_temp[:]);
     }
@@ -103,7 +123,7 @@ get_coff_symbols_lib :: proc(file: os.Handle, lib: ^Lib)
     {
         header, ok := read_archive_header(file);
         
-        size, size_ok := strconv.parse_i64(header.size[:], 10);
+        sz, size_ok := strconv.parse_i64(string(header.size[:]), 10);
         if !size_ok
         {
             fmt.eprintf("ERROR: Could not read first linker member size\n");
@@ -111,7 +131,7 @@ get_coff_symbols_lib :: proc(file: os.Handle, lib: ^Lib)
         }
         
         sz = sz + sz%2;
-        os.seek(file, sz, os.SEEK_CUR);
+        os.seek(file, sz, SEEK_CUR);
     }
     
     /* Second Linker Member */
@@ -151,13 +171,13 @@ read_archive_header :: proc(file: os.Handle) -> (header: Coff_Archive_Header, ok
 
 get_coff_symbols_import :: proc(file: os.Handle, lib: ^Lib, offset: u32)
 {
-    os.seek(file, i64(offset), os.SEEK_SET);
+    os.seek(file, i64(offset), SEEK_SET);
     
     header, ok := read_archive_header(file);
     
     sig: [4]u8;
     os.read(file, sig[:]);
-    os.seek(file, -4, os.SEEK_CUR);
+    os.seek(file, -4, SEEK_CUR);
     if string(sig[:]) == "\x00\x00\xff\xff"
     {
         get_coff_symbols_import_short(file, lib);
@@ -208,12 +228,12 @@ get_coff_symbols_import_long :: proc(file: os.Handle, lib: ^Lib, offset: u32)
     
     string_table_offset := header.symtbl_offset + (header.num_symbols + size_of(Coff_Symbol));
     string_table_length: u32;
-    os.seek(file, i64(offset + string_table_offset), os.SEEK_SET);
+    os.seek(file, i64(offset + string_table_offset), SEEK_SET);
     os.read_ptr(file, &string_table_length, 4);
     string_table := make([]u8, string_table_length);
     os.read(file, string_table);
     
-    os.seek(file, i64(offset + header.symtbl_offset), os.SEEK_SET);
+    os.seek(file, i64(offset + header.symtbl_offset), SEEK_SET);
     for i in 0..<header.num_symbols
     {
         symbol: Coff_Symbol;
@@ -233,9 +253,10 @@ get_coff_symbols_import_long :: proc(file: os.Handle, lib: ^Lib, offset: u32)
 Coff_Header :: struct
 {
     machine: u16,
-    num_section: u16,
+    num_sections: u16,
     time: u32,
-    symtbl_offsets: u32,
+    symtbl_offset: u32,
+    num_symbols: u32,
     opthdr_size: u16,
     flags: u16,
 }

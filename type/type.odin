@@ -45,6 +45,13 @@ Primitive_Kind :: enum
     u16,
     u32,
     u64,
+    
+    wchar_t,
+    size_t,
+    ssize_t,
+    ptrdiff_t,
+    uintptr_t,
+    intptr_t,
 }
 
 Type :: struct
@@ -54,6 +61,7 @@ Type :: struct
     align: int,
     variant: union
     {
+        Invalid,
         Primitive,
         Named,
         Pointer,
@@ -65,6 +73,8 @@ Type :: struct
         Va_Arg,
     },
 }
+
+Invalid :: struct{};
 
 Primitive :: struct
 {
@@ -114,9 +124,11 @@ Bitfield :: struct
 
 Va_Arg :: struct {}
 
+@static type_invalid := Type{size=0, variant=Invalid{}};
+
 @static type_void := Type{size=0, variant=Primitive{.void, "void", {}}};
 
-@static type_char      := Type{size=size_of(c.char), variant=Primitive{.char, "char", {.Integer}}};
+@static type_char      := Type{size=size_of(c.char), variant=Primitive{.char, "char", {.Integer, .Unsigned}}};
 
 @static type_schar     := Type{size=size_of(c.schar),     variant=Primitive{.schar,     "schar",     {.Integer}}};
 @static type_short     := Type{size=size_of(c.short),     variant=Primitive{.short,     "short",     {.Integer}}};
@@ -145,6 +157,14 @@ Va_Arg :: struct {}
 @static type_i64 := Type{size=size_of(i64), variant=Primitive{.i64, "i64", {.Integer}}};
 
 @static type_va_arg := Type{size=0, variant=Va_Arg{}};
+
+
+@static type_size_t    := Type{size=size_of(c.size_t), variant=Primitive{.size_t, "size_t", {.Integer, .Unsigned}}};
+@static type_ssize_t   := Type{size=size_of(c.ssize_t), variant=Primitive{.ssize_t, "ssize_t", {.Integer}}};
+@static type_ptrdiff_t := Type{size=size_of(c.ptrdiff_t), variant=Primitive{.ptrdiff_t, "ptrdiff_t", {.Integer}}};
+@static type_uintptr_t := Type{size=size_of(c.uintptr_t), variant=Primitive{.uintptr_t, "uintptr_t", {.Integer, .Unsigned}}};
+@static type_intptr_t  := Type{size=size_of(c.intptr_t), variant=Primitive{.intptr_t, "intptr_t", {.Integer}}};
+@static type_wchar_t   := Type{size=size_of(c.wchar_t), variant=Primitive{.wchar_t, "wchar_t", {.Integer, .Unsigned}}};
 
 @static primitive_types := [?]^Type
 {
@@ -357,6 +377,7 @@ base_type :: proc(type: ^Type) -> ^Type
         case Pointer: return v.base;
         case Array: return v.base;
         
+        case Invalid: return type;
         case Primitive: return type;
         case Named: return type;
         case Func: return type;

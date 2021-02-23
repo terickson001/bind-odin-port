@@ -8,6 +8,7 @@ import "../lex"
 import "../ast"
 import "../type"
 import "../config"
+import "../lib"
 
 @private
 Token :: lex.Token;
@@ -20,11 +21,30 @@ Type :: type.Type;
 
 Checker :: struct
 {
-    // decls: ^Node,
     builtins: map[string]^Symbol,
     symbols: map[string]^Symbol,
     sym_id: u64,
 }
+
+type_aliases := map[string]^type.Type
+{
+    "int8_t"  = &type.type_i8,
+    "int16_t" = &type.type_i16,
+    "int32_t" = &type.type_i32,
+    "int64_t" = &type.type_i64,
+    
+    "uint8_t"  = &type.type_u8,
+    "uint16_t" = &type.type_u16,
+    "uint32_t" = &type.type_u32,
+    "uint64_t" = &type.type_u64,
+    
+    "size_t"  = &type.type_size_t,
+    "ssize_t" = &type.type_ssize_t,
+    "ptrdiff_t" = &type.type_ptrdiff_t,
+    "uintptr_t" = &type.type_uintptr_t,
+    "intptr_t" = &type.type_intptr_t,
+    "wchar_t"  = &type.type_wchar_t,
+};
 
 install_builtins :: proc(using c: ^Checker)
 {
@@ -36,6 +56,31 @@ install_builtins :: proc(using c: ^Checker)
         symbol.kind = .Type;
         symbol.flags |= {.Builtin};
         builtins[p.name] = symbol;
+    }
+    
+    
+    for k, v in type_aliases
+    {
+        symbol := ast.make_symbol(k, nil);
+        symbol.type = v;
+        symbol.kind = .Type;
+        symbol.flags |= {.Builtin};
+        builtins[k] = symbol;
+    }
+    
+    
+    symbol := ast.make_symbol("va_list", nil);
+    symbol.flags |= {.Builtin};
+    symbol.type = &type.type_invalid;
+    builtins[symbol.name] = symbol;
+    
+    switch lib.sys_info.compiler
+    {
+        case "gcc":
+        symbol := ast.make_symbol("__builtin_va_list", nil);
+        symbol.flags |= {.Builtin};
+        symbol.type = &type.type_invalid;
+        builtins[symbol.name] = symbol;
     }
 }
 
@@ -87,7 +132,26 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node)
                 }
                 else
                 {
-                    base.symbol = symbols[name];
+                    symbol := symbols[name];
+                    switch r in symbol.decl.derived
+                    {
+                        case ast.Struct_Type:
+                        if r.fields == nil && base.derived.(ast.Struct_Type).fields != nil
+                        {
+                            symbol.decl = base;
+                        }
+                        case ast.Union_Type:
+                        if r.fields == nil && base.derived.(ast.Union_Type).fields != nil
+                        {
+                            symbol.decl = base;
+                        }
+                        case ast.Enum_Type:
+                        if r.fields == nil && base.derived.(ast.Enum_Type).fields != nil
+                        {
+                            symbol.decl = base;
+                        }
+                    }
+                    base.symbol = symbol;
                 }
             }
             
@@ -203,6 +267,19 @@ check_file :: proc(using c: ^Checker, file: ast.File)
         {
             case ast.Function_Decl: check_declaration(c, decl);
             case ast.Var_Decl: check_declaration(c, decl);
+            case ast.Typedef:
+            do_check := false;
+            for var := v.var_list; var != nil; var = var.next
+            {
+                loc := ast.node_location(var.derived.(ast.Var_Decl).type_expr);
+                
+                switch _ in var.derived.(ast.Var_Decl).type_expr.derived
+                {
+                    case ast.Enum_Type: do_check = true;
+                }
+                if !strings.has_prefix(loc.filename, config.global_config.root) do do_check = false;
+            }
+            if do_check do check_declaration(c, decl);
         }
     }
 }
@@ -220,6 +297,7 @@ check_declaration :: proc(using c: ^Checker, decl: ^Node)
         }
         else
         {
+            name := ast.var_ident(decl);
             check_type(c, v.type_expr);
             assert(v.type_expr.type != nil);
             decl.type = v.type_expr.type;
@@ -232,6 +310,7 @@ check_declaration :: proc(using c: ^Checker, decl: ^Node)
         case ast.Typedef:
         for var := v.var_list; var != nil; var = var.next
         {
+            // fmt.println("TYPEDEF:", ast.var_ident(var));
             check_type(c, var.derived.(ast.Var_Decl).type_expr);
             assert(var.derived.(ast.Var_Decl).type_expr.type != nil);
             var.type = type.named_type(ast.var_ident(var), var.derived.(ast.Var_Decl).type_expr.type);
@@ -242,6 +321,10 @@ check_declaration :: proc(using c: ^Checker, decl: ^Node)
         case ast.Function_Decl:
         check_type(c, v.type_expr);
         assert(v.type_expr.type != nil);
+        if v.type_expr.type == &type.type_invalid
+        {
+            decl.symbol.used = false;
+        }
         decl.type = v.type_expr.type;
         decl.symbol.type = decl.type;
         
@@ -368,7 +451,7 @@ check_const_expr :: proc(using c: ^Checker, const_expr: ^Node) -> Operand
     op := check_expr(c, const_expr);
     if !op.const
     {
-        fmt.eprintf("Expected a constant expression\n");
+        lex.error(ast.node_token(const_expr), "Expected a constant expression\n");
         os.exit(1);
     }
     return op;
@@ -430,12 +513,12 @@ promote_operand :: proc(op: ^Operand)
         if type.is_unsigned(op.type)
         {
             v := op.val.(u64);
-            if v > u64(max(c.int)) do op.type = &type.type_uint;
-            else do op.type = &type.type_int;
+            if v > u64(max(c.int)) do cast_operand(op, &type.type_uint);
+            else do cast_operand(op, &type.type_int);
         }
         else
         {
-            op.type = &type.type_int;
+            cast_operand(op, &type.type_int);
         }
     }
 }
@@ -456,36 +539,44 @@ balance_binary_operands :: proc(lhs, rhs: ^Operand)
             {
                 if rhs.type.size > lhs.type.size
                 {
-                    lhs.type = rhs.type;
+                    cast_operand(lhs, rhs.type);
+                    // lhs.type = rhs.type;
                 }
                 else
                 {
-                    rhs.type = lhs.type;
+                    cast_operand(rhs, lhs.type);
+                    // rhs.type = lhs.type;
                 }
             }
             else if type.is_unsigned(rhs.type)
             {
                 if rhs.type.size >= lhs.type.size
                 {
-                    lhs.type = rhs.type;
+                    cast_operand(lhs, rhs.type);
+                    // lhs.type = rhs.type;
                 }
                 else
                 {
                     if rhs.val.(u64) > (2<<u64(8*lhs.type.size))-1
                     {
-                        lhs.type = rhs.type;
+                        cast_operand(lhs, rhs.type);
+                        // lhs.type = rhs.type;
                     }
                     else
                     {
-                        rhs.type = lhs.type;
+                        cast_operand(rhs, lhs.type);
+                        // rhs.type = lhs.type;
                     }
                 }
             }
             else
             {
-                v := lhs.val.(i64);
-                lhs.val = f64(v);
-                lhs.type = rhs.type;
+                cast_operand(lhs, rhs.type);
+                /*
+                                v := lhs.val.(i64);
+                                lhs.val = f64(v);
+                                lhs.type = rhs.type;
+                */
             }
             
             case type.is_unsigned(lhs.type):
@@ -493,36 +584,44 @@ balance_binary_operands :: proc(lhs, rhs: ^Operand)
             {
                 if rhs.type.size > lhs.type.size
                 {
-                    lhs.type = rhs.type;
+                    cast_operand(lhs, rhs.type);
+                    // lhs.type = rhs.type;
                 }
                 else
                 {
-                    rhs.type = lhs.type;
+                    cast_operand(rhs, lhs.type);
+                    // rhs.type = lhs.type;
                 }
             }
             else if type.is_signed(rhs.type)
             {
                 if lhs.type.size >= rhs.type.size
                 {
-                    rhs.type = lhs.type;
+                    cast_operand(rhs, lhs.type);
+                    // rhs.type = lhs.type;
                 }
                 else
                 {
                     if lhs.val.(u64) > (2<<u64(8*rhs.type.size))-1
                     {
-                        lhs.type = lhs.type;
+                        cast_operand(lhs, rhs.type);
+                        // lhs.type = lhs.type;
                     }
                     else
                     {
-                        rhs.type = lhs.type;
+                        cast_operand(rhs, lhs.type);
+                        // rhs.type = lhs.type;
                     }
                 }
             }
             else
             {
-                v := lhs.val.(u64);
-                lhs.val = f64(v);
-                lhs.type = rhs.type;
+                cast_operand(lhs, rhs.type);
+                /*
+                                v := lhs.val.(u64);
+                                lhs.val = f64(v);
+                                lhs.type = rhs.type;
+                */
             }
             
             case type.is_float(lhs.type):
@@ -530,29 +629,38 @@ balance_binary_operands :: proc(lhs, rhs: ^Operand)
             {
                 if lhs.type.size > rhs.type.size
                 {
-                    rhs.type = lhs.type;
+                    cast_operand(rhs, lhs.type);
+                    // rhs.type = lhs.type;
                 }
                 else
                 {
-                    lhs.type = rhs.type;
+                    cast_operand(lhs, rhs.type);
+                    // lhs.type = rhs.type;
                 }
             }
             else if type.is_unsigned(rhs.type)
             {
-                v := rhs.val.(u64);
-                rhs.val = f64(v);
-                rhs.type = lhs.type;
+                cast_operand(rhs, lhs.type);
+                /*
+                                v := rhs.val.(u64);
+                                rhs.val = f64(v);
+                                rhs.type = lhs.type;
+                */
             }
             else
             {
-                v := rhs.val.(i64);
-                rhs.val = f64(v);
-                rhs.type = lhs.type;
+                cast_operand(rhs, lhs.type);
+                /*
+                                v := rhs.val.(i64);
+                                rhs.val = f64(v);
+                                rhs.type = lhs.type;
+                */
             }
         }
     }
+    
+    assert(lhs.type == rhs.type);
 }
-
 eval_binary_op :: proc(operator: ^Token, lhs, rhs: Operand) -> Operand
 {
     ret := lhs;
@@ -665,6 +773,11 @@ cast_operand :: proc(op: ^Operand, typ: ^Type)
                 v := op.val.(u64);
                 op.val = f64(v);
             }
+            else if type.is_signed(typ)
+            {
+                v := op.val.(u64);
+                op.val = i64(v);
+            }
             op.type = typ;
             
             case type.is_signed(op.type):
@@ -673,10 +786,20 @@ cast_operand :: proc(op: ^Operand, typ: ^Type)
                 v := op.val.(i64);
                 op.val = f64(v);
             }
+            else if type.is_unsigned(typ)
+            {
+                v := op.val.(i64);
+                op.val = u64(v);
+            }
             op.type = typ;
             
             case type.is_float(op.type):
-            if type.is_integer(typ)
+            if type.is_signed(typ)
+            {
+                v := op.val.(f64);
+                op.val = i64(v);
+            }
+            else if type.is_unsigned(typ)
             {
                 v := op.val.(f64);
                 op.val = u64(v);
@@ -694,8 +817,19 @@ check_expr :: proc(using c: ^Checker, expr: ^Node) -> Operand
     {
         case ast.Ident:
         symbol := check_name(c, expr);
+        // fmt.println(ast.ident(expr));
         assert(symbol.type != nil);
         op.type = symbol.type;
+        if symbol.const_val != nil
+        {
+            op.const = true;
+            switch
+            {
+                case type.is_signed(op.type): op.val = symbol.const_val.(i64);
+                case type.is_unsigned(op.type): op.val = symbol.const_val.(u64);
+                case type.is_float(op.type): op.val = symbol.const_val.(f64);
+            }
+        }
         
         case ast.Paren_Expr:
         op = check_expr(c, v.expr);
@@ -710,7 +844,10 @@ check_expr :: proc(using c: ^Checker, expr: ^Node) -> Operand
         check_type(c, v.type_expr);
         assert(v.type_expr.type != nil);
         op = check_expr(c, v.expr);
+        // fmt.println("CASTING");
+        // fmt.println(ast.node_location(v.type_expr));
         cast_operand(&op, v.type_expr.type);
+        // fmt.println("DONE");
         
         case ast.Unary_Expr:
         op = check_expr(c, v.operand);
@@ -721,12 +858,15 @@ check_expr :: proc(using c: ^Checker, expr: ^Node) -> Operand
         case ast.Binary_Expr:
         lhs := check_expr(c, v.lhs);
         rhs := check_expr(c, v.rhs);
-        // fmt.println(lhs);
-        // fmt.println(rhs);
+        /*
+                fmt.println(lhs);
+                fmt.println(rhs);
+        */
+        // fmt.println(ast.node_token(v.lhs).text);
         balance_binary_operands(&lhs, &rhs);
-        
         assert(lhs.type == rhs.type);
         expr.type = lhs.type;
+        // fmt.println(ast.node_location(v.lhs));
         op = eval_binary_op(v.op, lhs, rhs);
         
         case ast.Ternary_Expr:
@@ -762,7 +902,6 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node)
         type_expr.type = symbol.type;
         
         case ast.Ident:
-        // fmt.printf("IDENT TYPE: %q\n", ast.ident(type_expr));
         symbol := check_name(c, type_expr);
         assert(symbol.type != nil);
         type_expr.type = symbol.type;
@@ -796,6 +935,11 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node)
         {
             check_declaration(c, p);
             assert(p.type != nil);
+            if p.type == &type.type_invalid
+            {
+                type_expr.type = &type.type_invalid;
+                return;
+            }
             append(&param_types, p.type);
         }
         ret_type: ^Type;
@@ -815,12 +959,23 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node)
             if found
             {
                 resolve_symbol(c, symbol);
+                assert(symbol.type != nil);
                 if symbol.type != nil
                 {
                     type_expr.symbol = symbol;
                     type_expr.type = symbol.type;
                     break;
                 }
+            }
+            else
+            {
+                // Opaque struct
+                symbol = ast.make_symbol(name, type_expr);
+                type_expr.type = type.struct_type({});
+                symbol.type = type_expr.type;
+                symbol.used = true;
+                symbol.kind = .Type;
+                symbols[name] = symbol;
             }
         }
         else if type_expr.symbol != nil && !type_expr.symbol.used && v.name != nil
@@ -929,6 +1084,28 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node)
         
         case ast.Enum_Type:
         type_expr.type = &type.type_int;
+        if type_expr.symbol != nil do type_expr.symbol.type = type_expr.type;
+        idx := 0;
+        for f := v.fields; f != nil; f = f.next
+        {
+            name := ast.ident(f.derived.(ast.Enum_Field).name);
+            if f.derived.(ast.Enum_Field).value != nil
+            {
+                value := check_const_expr(c, f.derived.(ast.Enum_Field).value);
+                cast_operand(&value, &type.type_int);
+                idx = int(value.val.(i64));
+            }
+            
+            symbol := ast.make_symbol(name, f);
+            symbol.uid = sym_id;
+            sym_id += 1;
+            f.type = &type.type_int;
+            symbol.type = &type.type_int;
+            symbol.kind = .Const;
+            symbol.const_val = i64(idx);
+            idx += 1;
+            symbols[name] = symbol;
+        }
     }
 }
 
@@ -948,15 +1125,15 @@ lookup_symbol :: proc(using c: ^Checker, ident: ^Node) -> ^Symbol
     name := ast.ident(ident);
     symbol: ^Symbol;
     ok: bool;
-    if symbol, ok = symbols[name]; ok
-    {
-        return symbol;
-    }
     if symbol, ok = builtins[name]; ok
     {
         return symbol;
     }
-    fmt.eprintf("Symbol %q not found\n", name);
+    if symbol, ok = symbols[name]; ok
+    {
+        return symbol;
+    }
+    lex.error(ast.node_token(ident), "Symbol %q not found", name);
     os.exit(1);
 }
 

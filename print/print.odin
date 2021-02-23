@@ -37,6 +37,50 @@ Printer :: struct
 @static type_cstring: ^Type;
 @static type_rawptr: ^Type;
 
+@static renamed_idents := map[string]string{
+    // Reserverd Words
+    "align_of" = "align_of_",
+    "defer" = "defer_",
+    "import" = "import_",
+    "proc" = "proc_",
+    "transmute" = "transmute_",
+    "auto_cast" = "auto_cast_",
+    "cast" = "cast_",
+    "distinct" = "distinct_",
+    "fallthrough" = "fallthrough_",
+    "in" = "in_",
+    "not_in" = "not_in_",
+    "type_of" = "type_of_",
+    "do" = "do_",
+    "inline" = "inline_",
+    "offset_of" = "offset_of_",
+    "size_of" = "size_of_",
+    "typeid" = "typeid_",
+    "bit_set" = "bit_set",
+    "context" = "context_",
+    "dynamic" = "dynamic_",
+    "foreign" = "foreign_",
+    "opaque" = "opaque_",
+    "map" = "map_",
+    "package" = "package_",
+    "using" = "using_",
+    
+    "int8_t"  = "i8",
+    "int16_t" = "i16",
+    "int32_t" = "i32",
+    "int64_t" = "i64",
+    
+    "uint8_t"  = "u8",
+    "uint16_t" = "u16",
+    "uint32_t" = "u32",
+    "uint64_t" = "u64",
+    
+    "size_t" = "uintptr",
+    "isize_t" = "intptr",
+    
+    "wchar_t" = "_c.wchar_t"
+};
+
 make_printer :: proc(symbols: map[string]^Symbol) -> Printer
 {
     p: Printer;
@@ -117,7 +161,16 @@ print_symbols :: proc(using p: ^Printer, filepath: string, syms: []^Symbol)
     
     for sym in syms
     {
-        if sym.kind == .Type do print_node(p, sym.decl, 0, true, false);
+        if sym.kind == .Type 
+        {
+            switch v in sym.decl.derived
+            {
+                case ast.Struct_Type: if ast.ident(v.name) in symbols do continue;
+                case ast.Union_Type:  if ast.ident(v.name) in symbols do continue;
+                case ast.Enum_Type:   if ast.ident(v.name) in symbols do continue;
+            }
+            print_node(p, sym.decl, 0, true, false);
+        }
     }
     
     for l in config.global_config.libs
@@ -133,7 +186,7 @@ print_symbols :: proc(using p: ^Printer, filepath: string, syms: []^Symbol)
         }
         if !has_exports do continue;
         
-        fmt.fprintf(out, "/***** %s *****/\n", l.name);
+        fmt.fprintf(out, "\n/***** %s *****/\n", l.name);
         if l.from_system
         {
             fmt.fprintf(out, "foreign import %s \"system:%s\"\n\n", l.name, l.file);
@@ -178,7 +231,6 @@ print_file :: proc(using p: ^Printer)
     else
     {
         files := group_symbols(p);
-        fmt.printf("%#v\n", files);
         for k, v in files
         {
             print_symbols(p, fmt.tprintf("%s/%s.odin", config.global_config.output, k), v[:]);
@@ -191,15 +243,19 @@ print_indent :: proc(using p: ^Printer, indent: int)
     for _ in 0..<indent do fmt.fprintf(out, "    ");
 }
 
-print_string :: proc(using p: ^Printer, str: string, indent: int)
+print_string :: proc(using p: ^Printer, str: string, indent: int, padding := 0)
 {
     print_indent(p, indent);
-    fmt.fprintf(out, "%s", str);
+    str := str;
+    rename, found := renamed_idents[str];
+    if found do str = rename;
+    if padding != 0 do fmt.fprintf(out, "%*s", padding, str);
+    else do fmt.fprintf(out, "%s", str);
 }
 
-print_ident :: proc(using p: ^Printer, node: ^Node, indent: int)
+print_ident :: proc(using p: ^Printer, node: ^Node, indent: int, padding := 0)
 {
-    print_string(p, ast.ident(node), indent);
+    print_string(p, ast.ident(node), indent, padding);
 }
 
 print_node :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: bool, indent_first: bool)
@@ -239,7 +295,8 @@ print_function :: proc(using p: ^Printer, node: ^Node, indent: int)
     name := ast.ident(node.derived.(ast.Function_Decl).name);
     name_padding := proc_name_padding;
     
-    fmt.fprintf(out, "%*s :: proc", name_padding, name);
+    print_string(p, name, 0, name_padding);
+    fmt.fprintf(out, " :: proc");
     print_calling_convention(p, node.derived.(ast.Function_Decl).type_expr.derived.(ast.Function_Type).callconv);
     print_function_parameters(p, node.derived.(ast.Function_Decl).type_expr.derived.(ast.Function_Type).params);
     
@@ -303,6 +360,7 @@ print_function_parameters :: proc(using p: ^Printer, node: ^Node)
 
 print_type :: proc(using p: ^Printer, node: ^Node, indent: int)
 {
+    // fmt.println(node.derived);
     switch v in node.derived
     {
         case ast.Array_Type:    print_array_type(p, node, 0);
@@ -318,6 +376,7 @@ print_type :: proc(using p: ^Printer, node: ^Node, indent: int)
         fmt.fprintf(out, "_c.%s", v.name);
         
         case ast.Pointer_Type:
+        // if ast.node_token(v.type_expr).text == "Uint8" do fmt.println(v.type_expr.derived);
         if node.type == type_rawptr
         {
             fmt.fprintf(out, "rawptr");
@@ -414,14 +473,7 @@ print_binary_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
 print_unary_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
 {
     v := node.derived.(ast.Unary_Expr);
-    if v.op.kind != .Xor
-    {
-        fmt.fprintf(out, " %s ", v.op.text);
-    }
-    else
-    {
-        fmt.fprintf(out, " ~ ");
-    }
+    fmt.fprintf(out, "%s", v.op.text);
     print_expr(p, v.operand, 0);
 }
 
@@ -509,10 +561,14 @@ print_record :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: boo
     
     if name != ""
     {
-        if top_level do fmt.fprintf(out, "%s :: ", name);
+        if top_level 
+        {
+            print_string(p, name, 0);
+            fmt.fprintf(out, " :: ");
+        }
         else if fields == nil
         {
-            fmt.fprintf(out, "%s", name);
+            print_string(p, name, 0);
             return;
         }
     }
@@ -611,14 +667,16 @@ print_enum_fields :: proc(using p: ^Printer, node: ^Node, indent: int)
     for n := node; n != nil; n = n.next
     {
         v := n.derived.(ast.Enum_Field);
-        fmt.fprintf(out, "%*s :: ", field_padding, ast.ident(v.name));
+        print_ident(p, v.name, 0, field_padding);
+        fmt.fprintf(out, " :: ");
         if v.value != nil
         {
             print_expr(p, v.value, 0);
         }
         else if prev != nil
         {
-            fmt.fprintf(out, "%s + 1", ast.ident(prev.derived.(ast.Enum_Field).name));
+            print_ident(p, prev.derived.(ast.Enum_Field).name, 0);
+            fmt.fprintf(out, " + 1");
         }
         else
         {
@@ -641,7 +699,8 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
         case .Typedef:
         typedef = true;
         name := ast.var_ident(node);
-        fmt.fprintf(out, "%s :: ", name);
+        print_string(p, name, 0);
+        fmt.fprintf(out, " :: ");
         switch t in v.type_expr.derived
         {
             case ast.Enum_Type:
@@ -651,12 +710,36 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
                 print_type(p, v.type_expr, 0);
             }
             return;
+            
+            case ast.Struct_Type:
+            r_name: string;
+            if t.name != nil do r_name = ast.ident(t.name);
+            /*
+                        fmt.println(name, name == r_name , t.fields == nil , v.type_expr.symbol != nil , v.type_expr.symbol.decl.derived.(ast.Struct_Type).fields == nil);
+            */
+            if name == r_name && t.fields == nil && v.type_expr.symbol != nil && v.type_expr.symbol.decl.derived.(ast.Struct_Type).fields == nil
+            {
+                fmt.fprintf(out, "struct {{}");
+                return;
+            }
+            case ast.Union_Type:
+            r_name: string;
+            if t.name != nil do r_name = ast.ident(t.name);
+            /*
+                        fmt.println(name, name == r_name , t.fields == nil , v.type_expr.symbol != nil , v.type_expr.symbol.decl.derived.(ast.Struct_Type).fields == nil);
+            */
+            if name == r_name && t.fields == nil && v.type_expr.symbol != nil && v.type_expr.symbol.decl.derived.(ast.Struct_Type).fields == nil
+            {
+                fmt.fprintf(out, "union {{}");
+                return;
+            }
         }
         
         case .Variable:
         if !top_level do break;
         name := ast.var_ident(node);
-        fmt.fprintf(out, "%*s : ", p.var_name_padding, name);
+        print_string(p, name, 0, p.var_name_padding);
+        fmt.fprintf(out, " : ");
         
         case .Field:
         name := ast.var_ident(node);
@@ -667,11 +750,13 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
             case ast.Union_Type:  if t.fields != nil do name_padding = 1;
             case ast.Enum_Type:   if t.fields != nil do name_padding = 1;
         }
-        fmt.fprintf(out, "%*s : ", name_padding, name);
+        print_string(p, name, 0, name_padding);
+        fmt.fprintf(out, " : ");
         
         case .Parameter:
         name := ast.var_ident(node);
-        fmt.fprintf(out, "%s : ", name);
+        print_string(p, name, 0);
+        fmt.fprintf(out, " : ");
         
         case .AnonBitfield:
         fmt.fprintf(out, "_ : ");

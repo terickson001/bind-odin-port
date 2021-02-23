@@ -600,7 +600,7 @@ read_include_path :: proc(using pp: ^Preprocessor) -> (string, bool)
     #partial switch tokens.kind
     {
         case .String:
-        local_first := true;
+        local_first = true;
         filename = tokens.text[1:len(tokens.text)-1];
         tokens = tokens.next;
         
@@ -823,7 +823,7 @@ directive_pragma :: proc(using pp: ^Preprocessor)
     }
     else
     {
-        lex.warning(tok, "#pragma directive unhandled: #pragma %s", lex.token_list_string(line));
+        // lex.warning(tok, "#pragma directive unhandled: #pragma %s", lex.token_list_string(line));
     }
 }
 
@@ -858,7 +858,7 @@ __pragma :: proc(using pp: ^Preprocessor)
     }
     else
     {
-        lex.warning(tok, "__pragma statement unhandled: __pragma(%s)", lex.token_list_string(line));
+        // lex.warning(tok, "__pragma statement unhandled: __pragma(%s)", lex.token_list_string(line));
     }
 }
 
@@ -891,6 +891,6 @@ _Pragma :: proc(using pp: ^Preprocessor)
     }
     else
     {
-        lex.warning(tok, "_Pragma statement unhandled: _Pragma(%s)", str.text);
+        // lex.warning(tok, "_Pragma statement unhandled: _Pragma(%s)", str.text);
     }
 }

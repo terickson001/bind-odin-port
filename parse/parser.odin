@@ -318,7 +318,7 @@ parse_unary_expr :: proc(using p: ^Parser, parent_is_sizeof := false) -> ^Node
 
 parse_ternary_expr :: proc(using p: ^Parser, cond: ^Node) -> ^Node
 {
-    expect(p, .Question);
+    // expect(p, .Question);
     then := parse_expression(p);
     expect(p, .Colon);
     els_ := parse_expression(p);
@@ -918,7 +918,7 @@ parse_type :: proc(using p: ^Parser, var_name: ^^Node, check_type_table := false
         
         case .Ident:
         base_type = parse_ident(p);
-        if check_type_table && ast.ident(base_type) not_in type_table
+        if ast.ident(base_type) != "void" && check_type_table && ast.ident(base_type) not_in type_table
         {
             tokens = reset;
             return nil;

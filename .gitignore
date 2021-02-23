@@ -4,5 +4,5 @@ temp/
 *.exe
 *.obj
 test/*
-test/main.odin
-test/find_vs.dll
+!test/main.odin
+!test/find_vs.dll

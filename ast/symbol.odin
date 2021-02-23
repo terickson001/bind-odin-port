@@ -2,6 +2,7 @@ package ast
 
 Symbol_Kind :: enum u8
 {
+    nil,
     Var,
     Type,
     Func,

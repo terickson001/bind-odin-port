@@ -9,6 +9,8 @@ Case :: enum u8
     Ada,
     Snake,
     Screaming_Snake,
+    
+    Screaming, // Useful for comparison between cases
 }
 
 Config :: struct
@@ -27,7 +29,9 @@ Config :: struct
     libraries: []string,
     
     use_cstring: bool,
-    use_odin_enum: bool,
+    // @note(Tyler): Not fully supported, 
+    // enum values in expression do not get renamed properly
+    use_odin_enum: bool, 
     
     var_prefix:   string,
     type_prefix:  string,

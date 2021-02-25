@@ -40,7 +40,10 @@ main :: proc()
         // Bind
         package_name = "sdl",
         libraries = []string{"libSDL2.so"},
+        
         use_cstring = true,
+        use_odin_enum = true,
+        
         separate_output = false,
         
         var_prefix   = "SDL",

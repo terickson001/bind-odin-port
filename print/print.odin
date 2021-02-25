@@ -89,7 +89,7 @@ Printer :: struct
 };
 
 
-change_case :: proc(str: string, casing: config.Case) -> string
+change_case :: proc(str: string, casing: config.Case, preserve_trailing_underscores := true) -> string
 {
     if casing == nil || str == "" do return str;
     
@@ -120,6 +120,7 @@ change_case :: proc(str: string, casing: config.Case) -> string
                 case '_': start = idx;
                 case 'a'..'z':
                 append(&words, str[start:idx]);
+                caps = 1;
                 start = idx;
                 
                 case: continue;
@@ -133,6 +134,7 @@ change_case :: proc(str: string, casing: config.Case) -> string
                 {
                     append(&words, str[start:idx-1]);
                     start = idx-1;
+                    caps = 0;
                 }
                 continue;
                 
@@ -207,9 +209,20 @@ change_case :: proc(str: string, casing: config.Case) -> string
                 c := word[j];
                 strings.write_byte(&b, to_upper(c));
             }
+            
+            case .Screaming:
+            for _, j in word
+            {
+                c := word[j];
+                strings.write_byte(&b, to_upper(c));
+            }
         }
     }
-    for _ in 0..<trailing_underscores do strings.write_byte(&b, '_');
+    if preserve_trailing_underscores
+    {
+        for _ in 0..<trailing_underscores do strings.write_byte(&b, '_');
+    }
+    if casing == .Screaming do fmt.printf("%s -> %s\n", str, strings.to_string(b));
     return strings.to_string(b);
     
     to_upper :: proc(c: byte) -> byte
@@ -234,7 +247,7 @@ remove_prefix :: proc(str: string, prefix: string) -> string
     if strings.has_prefix(str[idx:], prefix)
     {
         idx += len(prefix);
-        for str[idx] == '_' do idx += 1; // Remove trailing underscores
+        for idx < len(str) && str[idx] == '_' do idx += 1; // Remove trailing underscores
         b := strings.make_builder(context.temp_allocator);
         for _ in 0..<underscores do strings.write_byte(&b, '_');
         strings.write_string(&b, str[idx:]);
@@ -779,13 +792,32 @@ print_inc_dec_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
     pprintf(p, "%s", v.op.text);
 }
 
-print_record :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: bool, indent_first: bool)
+common_enum_prefix :: proc(using p: ^Printer, fields: ^Node) -> string
+{
+    if fields == nil do return "";
+    prefix := ast.ident(fields.derived.(ast.Enum_Field).name);
+    for field := fields.next; field != nil; field = field.next
+    {
+        name := ast.ident(field.derived.(ast.Enum_Field).name);
+        idx := 0;
+        for idx < min(len(prefix), len(name))
+        {
+            if prefix[idx] != name[idx] do break;
+            idx += 1;
+        }
+        prefix = prefix[:idx];
+    }
+    return prefix;
+}
+
+print_record :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: bool, indent_first: bool, tpdef_name := "")
 {
     if indent_first do print_indent(p, indent);
     
     name: ^Node;
     fields: ^Node;
     is_enum := false;
+    enum_prefix: string;
     switch v in node.derived
     {
         case ast.Struct_Type:
@@ -799,8 +831,20 @@ print_record :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: boo
         case ast.Enum_Type:
         if v.name != nil do name = v.name;
         fields = v.fields;
-        pprintf(p, "/* ");
+        if !config.global_config.use_odin_enum do pprintf(p, "/* ");
         is_enum = true;
+        enum_prefix = common_enum_prefix(p, fields);
+        fmt.printf("ENUM_PREFIX: %q\n", enum_prefix);
+        if (name != nil || tpdef_name != "") && enum_prefix != ""
+        {
+            enum_name := name != nil ? ast.ident(name) : tpdef_name;
+            screaming_prefix := change_case(enum_prefix, .Screaming, false);
+            if change_case(enum_name, .Screaming, false) != screaming_prefix &&
+                change_case(remove_prefix(enum_name, config.global_config.type_prefix), .Screaming, false) != screaming_prefix
+            {
+                enum_prefix = "";
+            }
+        }
     }
     
     if name != nil
@@ -816,9 +860,22 @@ print_record :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: boo
             return;
         }
     }
-    else if is_enum
+    else if is_enum && !config.global_config.use_odin_enum
     {
-        pprintf(p, "using _ :: ");
+        pprintf(p, " <ENUM> :: ");
+    }
+    else if is_enum && top_level
+    {
+        if enum_prefix == ""
+        {
+            pprintf(p, "// @Attention: Enum needs name\n");
+            pprintf(p, " <ENUM> :: ");
+        }
+        else
+        {
+            print_string(p, enum_prefix, 0, 0, .Type);
+            pprintf(p, " :: ");
+        }
     }
     
     switch v in node.derived
@@ -829,7 +886,7 @@ print_record :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: boo
     }
     
     pprintf(p, " {{");
-    if is_enum do pprintf(p, " */");
+    if is_enum && !config.global_config.use_odin_enum do pprintf(p, " */");
     if fields != nil
     {
         pprintf(p, "\n");
@@ -837,14 +894,14 @@ print_record :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: boo
         {
             case ast.Struct_Type: print_struct_fields(p, fields, indent+1, v.only_bitfield);
             case ast.Union_Type:  print_union_fields (p, fields, indent+1);
-            case ast.Enum_Type:   print_enum_fields  (p, fields, indent+1);
+            case ast.Enum_Type:   print_enum_fields  (p, fields, indent+1, enum_prefix);
         }
     }
     
     print_indent(p, indent);
-    if is_enum do pprintf(p, "/* ");
+    if is_enum && !config.global_config.use_odin_enum do pprintf(p, "/* ");
     pprintf(p, "}");
-    if is_enum do pprintf(p, " */");
+    if is_enum && !config.global_config.use_odin_enum do pprintf(p, " */");
 }
 
 print_struct_fields :: proc(using p: ^Printer, node: ^Node, indent: int, only_bitfield: bool)
@@ -898,37 +955,75 @@ print_union_fields :: proc(using p: ^Printer, node: ^Node, indent: int)
     }
 }
 
-print_enum_fields :: proc(using p: ^Printer, node: ^Node, indent: int)
+print_enum_fields :: proc(using p: ^Printer, node: ^Node, indent: int, prefix: string)
 {
-    field_padding := 0;
-    for n := node; n != nil; n = n.next
+    if !config.global_config.use_odin_enum
     {
-        v := n.derived.(ast.Enum_Field);
-        field_padding = max(field_padding, len(ast.ident(v.name)));
-    }
-    
-    prev: ^Node;
-    for n := node; n != nil; n = n.next
-    {
-        v := n.derived.(ast.Enum_Field);
-        print_ident(p, v.name, 0, field_padding, .Const);
-        pprintf(p, " :: ");
-        if v.value != nil
+        field_padding := 0;
+        for n := node; n != nil; n = n.next
         {
-            print_expr(p, v.value, 0);
-        }
-        else if prev != nil
-        {
-            print_ident(p, prev.derived.(ast.Enum_Field).name, 0, 0, .Const);
-            pprintf(p, " + 1");
-        }
-        else
-        {
-            pprintf(p, "0");
+            v := n.derived.(ast.Enum_Field);
+            field_padding = max(field_padding, len(ast.ident(v.name)));
         }
         
-        pprintf(p, ";\n");
-        prev = n;
+        prev: ^Node;
+        for n := node; n != nil; n = n.next
+        {
+            v := n.derived.(ast.Enum_Field);
+            print_ident(p, v.name, 0, field_padding, .Const);
+            pprintf(p, " :: ");
+            if v.value != nil
+            {
+                print_expr(p, v.value, 0);
+            }
+            else if prev != nil
+            {
+                print_ident(p, prev.derived.(ast.Enum_Field).name, 0, 0, .Const);
+                pprintf(p, " + 1");
+            }
+            else
+            {
+                pprintf(p, "0");
+            }
+            
+            pprintf(p, ";\n");
+            prev = n;
+        }
+    }
+    else
+    {
+        prefix := prefix;
+        if prefix == "" do prefix = config.global_config.const_prefix;
+        
+        field_padding := 0;
+        for n := node; n != nil; n = n.next
+        {
+            v := n.derived.(ast.Enum_Field);
+            if v.value != nil
+            {
+                name := ast.ident(v.name);
+                renamed := change_case(remove_prefix(name, prefix), config.global_config.const_case);
+                field_padding = max(field_padding, len(renamed));
+            }
+        }
+        
+        for n := node; n != nil; n = n.next
+        {
+            v := n.derived.(ast.Enum_Field);
+            name := ast.ident(v.name);
+            renamed := change_case(remove_prefix(name, prefix), config.global_config.const_case);
+            //print_ident(p, v.name, 0, field_padding, .Const);
+            if v.value != nil
+            {
+                pprintf(p, "%*s = ", field_padding, renamed);
+                print_expr(p, v.value, 0);
+            }
+            else
+            {
+                pprintf(p, "%s", renamed);
+            }
+            pprintf(p, ",\n");
+        }
     }
 }
 
@@ -948,12 +1043,20 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
         switch t in v.type_expr.derived
         {
             case ast.Enum_Type:
-            pprintf(p, "_c.int;\n");
-            if t.fields != nil
+            if !config.global_config.use_odin_enum
             {
-                print_type(p, v.type_expr, 0);
+                pprintf(p, "_c.int;\n");
+                if t.fields != nil
+                {
+                    print_record(p, v.type_expr, 0, false, false, name);
+                }
+                return;
             }
-            return;
+            else
+            {
+                print_record(p, v.type_expr, 0, false, false, name);
+                return;
+            }
             
             case ast.Struct_Type:
             r_name: string;

@@ -102,6 +102,7 @@ change_case :: proc(str: string, casing: config.Case) -> string
     
     start := idx;
     prev: byte;
+    caps := 0;
     for idx < len(str)
     {
         defer 
@@ -113,6 +114,7 @@ change_case :: proc(str: string, casing: config.Case) -> string
         switch str[idx]
         {
             case 'A'..'Z':
+            caps += 1;
             switch prev
             {
                 case '_': start = idx;
@@ -126,9 +128,18 @@ change_case :: proc(str: string, casing: config.Case) -> string
             switch prev
             {
                 case '_': start = idx;
+                case 'A'..'Z':
+                if caps > 1
+                {
+                    append(&words, str[start:idx-1]);
+                    start = idx-1;
+                }
+                continue;
+                
                 case '0'..'9':
                 append(&words, str[start:idx]);
                 start = idx;
+                caps = 0;
                 
                 case: continue;
             }
@@ -144,6 +155,7 @@ change_case :: proc(str: string, casing: config.Case) -> string
             {
                 case 'a'..'z', 'A'..'Z', '0'..'9':
                 append(&words, str[start:idx]);
+                caps = 0;
                 start = idx;
                 
                 case: continue;

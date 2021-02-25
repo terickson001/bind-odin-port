@@ -25,8 +25,9 @@ Config :: struct
     // Bind
     package_name: string,
     libraries: []string,
+    
     use_cstring: bool,
-    separate_output: bool,
+    use_odin_enum: bool,
     
     var_prefix:   string,
     type_prefix:  string,
@@ -38,7 +39,9 @@ Config :: struct
     proc_case:  Case,
     const_case: Case,
     
-    //
+    separate_output: bool,
+    
+    // Populated at runtime
     
     libs: []lib.Lib,
 }

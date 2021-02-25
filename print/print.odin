@@ -24,6 +24,7 @@ Type :: type.Type;
 Printer :: struct
 {
     symbols: map[string]^Symbol,
+    rename_map: map[string]string, // [Renamed]Original
     
     out: os.Handle,
     outb: strings.Builder,
@@ -38,7 +39,7 @@ Printer :: struct
 @static type_cstring: ^Type;
 @static type_rawptr: ^Type;
 
-@static renamed_idents := map[string]string{
+@static reserved_words := map[string]string{
     // Reserverd Words
     "align_of" = "align_of_",
     "defer" = "defer_",
@@ -65,7 +66,9 @@ Printer :: struct
     "map" = "map_",
     "package" = "package_",
     "using" = "using_",
-    
+};
+
+@static specific_renames := map[string]string{
     "int8_t"  = "i8",
     "int16_t" = "i16",
     "int32_t" = "i32",
@@ -84,6 +87,130 @@ Printer :: struct
     "intptr_t"  = "int",
     "wchar_t" = "_c.wchar_t"
 };
+
+
+change_case :: proc(str: string, casing: config.Case) -> string
+{
+    if casing == nil || str == "" do return str;
+    
+    words: [dynamic]string;
+    defer delete(words);
+    
+    idx := 0;
+    for str[idx] == '_' do idx += 1;
+    leading_underscores := idx;
+    
+    start := idx;
+    prev: byte;
+    for idx < len(str)
+    {
+        defer 
+        {
+            prev = str[idx];
+            idx += 1;
+        }
+        
+        switch str[idx]
+        {
+            case 'A'..'Z':
+            switch prev
+            {
+                case '_': start = idx;
+                case 'a'..'z':
+                append(&words, str[start:idx]);
+                start = idx;
+                
+                case: continue;
+            }
+            case 'a'..'z':
+            switch prev
+            {
+                case '_': start = idx;
+                case '0'..'9':
+                append(&words, str[start:idx]);
+                start = idx;
+                
+                case: continue;
+            }
+            case '0'..'9':
+            switch prev
+            {
+                case '_': start = idx;
+                case: continue;
+            }
+            
+            case '_':
+            switch prev
+            {
+                case 'a'..'z', 'A'..'Z', '0'..'9':
+                append(&words, str[start:idx]);
+                start = idx;
+                
+                case: continue;
+            }
+        }
+    }
+    last_word := str[start:idx];
+    trailing_underscores := 0;
+    for c in last_word
+    {
+        if c == '_' do trailing_underscores += 1;
+    }
+    if trailing_underscores != len(last_word)
+    {
+        trailing_underscores = 0;
+        append(&words, last_word);
+    }
+    
+    b := strings.make_builder(context.temp_allocator);
+    for _ in 0..<leading_underscores do strings.write_byte(&b, '_');
+    for word, i in words
+    {
+        #partial switch casing
+        {
+            case .Ada:
+            if i != 0 do strings.write_byte(&b, '_');
+            fallthrough;
+            
+            case .Pascal:
+            for _, j in word
+            {
+                c := word[j];
+                if j == 0 do strings.write_byte(&b, to_upper(c));
+                else do strings.write_byte(&b, c);
+            }
+            
+            case .Snake:
+            if i != 0 do strings.write_byte(&b, '_');
+            for _, j in word
+            {
+                c := word[j];
+                strings.write_byte(&b, to_lower(c));
+            }
+            
+            case .Screaming_Snake:
+            if i != 0 do strings.write_byte(&b, '_');
+            for _, j in word
+            {
+                c := word[j];
+                strings.write_byte(&b, to_upper(c));
+            }
+        }
+    }
+    for _ in 0..<trailing_underscores do strings.write_byte(&b, '_');
+    return strings.to_string(b);
+    
+    to_upper :: proc(c: byte) -> byte
+    {
+        if c >= 'a' && c <= 'z' do return c-32;
+        return c;
+    }
+    to_lower :: proc(c: byte) -> byte
+    {
+        if c >= 'A' && c <= 'Z' do return c+32;
+        return c;
+    }
+}
 
 remove_prefix :: proc(str: string, prefix: string) -> string
 {
@@ -289,29 +416,74 @@ print_indent :: proc(using p: ^Printer, indent: int)
     for _ in 0..<indent do pprintf(p, "    ");
 }
 
-print_string :: proc(using p: ^Printer, str: string, indent: int, padding := 0, prefix := "")
+print_string :: proc(using p: ^Printer, str: string, indent: int, padding := 0, kind: ast.Symbol_Kind = nil)
 {
     print_indent(p, indent);
-    str := str;
-    unprefixed := remove_prefix(str, prefix);
-    sym, found := symbols[unprefixed];
-    if found && sym.used && prefix != "" && unprefixed != str
+    if renamed, found := specific_renames[str]; found
     {
-        fmt.eprintf("NOTE: Could not unprefix %q due to name collision\n", str);
+        if padding != 0 do pprintf(p, "%*s", padding, renamed);
+        else do pprintf(p, "%s", renamed);
+        return;
+    }
+    
+    original_str := str;
+    
+    str := str;
+    prefix: string;
+    casing: config.Case;
+    #partial switch kind
+    {
+        case .Var:
+        prefix = config.global_config.var_prefix;
+        casing = config.global_config.var_case;
+        case .Func:
+        prefix = config.global_config.proc_prefix;
+        casing = config.global_config.proc_case;
+        case .Const:
+        prefix = config.global_config.const_prefix;
+        casing = config.global_config.const_case;
+        case .Type:
+        prefix = config.global_config.type_prefix;
+        casing = config.global_config.type_case;
+    }
+    
+    unprefixed := remove_prefix(str, prefix);
+    recased := change_case(unprefixed, casing);
+    orig, found := rename_map[recased];
+    if found && orig != str
+    {
+        if recased != unprefixed
+        {
+            orig, found := rename_map[unprefixed];
+            if found && orig != str
+            {
+                fmt.eprintf("Note: Could not unprefix or recase %q due to name collision\n", str);
+            }
+            else
+            {
+                fmt.eprintf("NOTE: Could not unprefix %q due to name collision\n", str);
+                str = unprefixed;
+            }
+        }
+        else
+        {
+            fmt.eprintf("NOTE: Could not unprefix or recase %q due to name collision\n", str);
+        }
     }
     else
     {
-        str = unprefixed;
+        str = recased;
     }
-    rename, renamed := renamed_idents[str];
+    rename_map[str] = original_str;
+    rename, renamed := reserved_words[str];
     if renamed do str = rename;
     if padding != 0 do pprintf(p, "%*s", padding, str);
     else do pprintf(p, "%s", str);
 }
 
-print_ident :: proc(using p: ^Printer, node: ^Node, indent: int, padding := 0, prefix := "")
+print_ident :: proc(using p: ^Printer, node: ^Node, indent: int, padding := 0, kind: ast.Symbol_Kind = nil)
 {
-    print_string(p, ast.ident(node), indent, padding, prefix);
+    print_string(p, ast.ident(node), indent, padding, kind);
 }
 
 print_node :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: bool, indent_first: bool)
@@ -351,7 +523,7 @@ print_function :: proc(using p: ^Printer, node: ^Node, indent: int)
     name := node.derived.(ast.Function_Decl).name;
     name_padding := proc_name_padding;
     
-    print_ident(p, name, 0, name_padding, config.global_config.proc_prefix);
+    print_ident(p, name, 0, name_padding, .Func);
     pprintf(p, " :: proc");
     print_calling_convention(p, node.derived.(ast.Function_Decl).type_expr.derived.(ast.Function_Type).callconv);
     print_function_parameters(p, node.derived.(ast.Function_Decl).type_expr.derived.(ast.Function_Type).params);
@@ -426,7 +598,7 @@ print_type :: proc(using p: ^Printer, node: ^Node, indent: int)
         case ast.Struct_Type:   print_node(p, node, indent, false, false);
         case ast.Union_Type:    print_node(p, node, indent, false, false);
         case ast.Enum_Type:     print_node(p, node, indent, false, false);
-        case ast.Ident:         print_ident(p, node, indent, 0, config.global_config.type_prefix);
+        case ast.Ident:         print_ident(p, node, indent, 0, .Type);
         case ast.Numeric_Type:  
         print_indent(p, indent);
         pprintf(p, "_c.%s", v.name);
@@ -499,18 +671,9 @@ print_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
         case ast.Basic_Lit:     print_string       (p, v.token.text, indent);
         
         case ast.Ident:
-        prefix := "";
-        if node.symbol != nil
-        {
-            #partial switch node.symbol.kind
-            {
-                case .Var:   prefix = config.global_config.var_prefix;
-                case .Type:  prefix = config.global_config.type_prefix;
-                case .Const: prefix = config.global_config.const_prefix;
-                case .Func:  prefix = config.global_config.proc_prefix;
-            }
-        }
-        print_ident(p, node, indent, 0, prefix);
+        kind: ast.Symbol_Kind;
+        if node.symbol != nil do kind = node.symbol.kind;
+        print_ident(p, node, indent, 0, kind);
     }
 }
 
@@ -632,12 +795,12 @@ print_record :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: boo
     {
         if top_level 
         {
-            print_ident(p, name, 0, 0, config.global_config.type_prefix);
+            print_ident(p, name, 0, 0, .Type);
             pprintf(p, " :: ");
         }
         else if fields == nil
         {
-            print_ident(p, name, 0, 0, config.global_config.type_prefix);
+            print_ident(p, name, 0, 0, .Type);
             return;
         }
     }
@@ -736,7 +899,7 @@ print_enum_fields :: proc(using p: ^Printer, node: ^Node, indent: int)
     for n := node; n != nil; n = n.next
     {
         v := n.derived.(ast.Enum_Field);
-        print_ident(p, v.name, 0, field_padding, config.global_config.const_prefix);
+        print_ident(p, v.name, 0, field_padding, .Const);
         pprintf(p, " :: ");
         if v.value != nil
         {
@@ -744,7 +907,7 @@ print_enum_fields :: proc(using p: ^Printer, node: ^Node, indent: int)
         }
         else if prev != nil
         {
-            print_ident(p, prev.derived.(ast.Enum_Field).name, 0, 0, config.global_config.const_prefix);
+            print_ident(p, prev.derived.(ast.Enum_Field).name, 0, 0, .Const);
             pprintf(p, " + 1");
         }
         else
@@ -768,7 +931,7 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
         case .Typedef:
         typedef = true;
         name := ast.var_ident(node);
-        print_string(p, name, 0, 0, config.global_config.type_prefix);
+        print_string(p, name, 0, 0, .Type);
         pprintf(p, " :: ");
         switch t in v.type_expr.derived
         {
@@ -801,7 +964,7 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
         case .Variable:
         if !top_level do break;
         name := ast.var_ident(node);
-        print_string(p, name, 0, p.var_name_padding, config.global_config.var_prefix);
+        print_string(p, name, 0, p.var_name_padding, .Var);
         pprintf(p, " : ");
         
         case .Field:

@@ -1,6 +1,7 @@
 package main
 
 import ".."
+import "../print"
 
 main :: proc()
 {
@@ -46,6 +47,11 @@ main :: proc()
         type_prefix  = "SDL",
         proc_prefix  = "SDL",
         const_prefix = "SDL",
+        
+        var_case   = .Snake,
+        type_case  = .Ada,
+        proc_case  = .Snake,
+        const_case = .Screaming_Snake,
     };
     
     bind.generate(config);

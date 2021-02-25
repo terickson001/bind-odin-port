@@ -2,6 +2,15 @@ package config
 
 import "../lib"
 
+Case :: enum u8
+{
+    nil,
+    Pascal,
+    Ada,
+    Snake,
+    Screaming_Snake,
+}
+
 Config :: struct
 {
     // General
@@ -23,6 +32,11 @@ Config :: struct
     type_prefix:  string,
     proc_prefix:  string,
     const_prefix: string,
+    
+    var_case:   Case,
+    type_case:  Case,
+    proc_case:  Case,
+    const_case: Case,
     
     //
     

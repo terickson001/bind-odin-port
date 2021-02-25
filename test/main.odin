@@ -42,7 +42,7 @@ main :: proc()
         libraries = []string{"libSDL2.so"},
         
         use_cstring = true,
-        use_odin_enum = true,
+        use_odin_enum = false,
         
         separate_output = false,
         

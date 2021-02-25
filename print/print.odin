@@ -1013,6 +1013,7 @@ print_enum_fields :: proc(using p: ^Printer, node: ^Node, indent: int, prefix: s
             name := ast.ident(v.name);
             renamed := change_case(remove_prefix(name, prefix), config.global_config.const_case);
             //print_ident(p, v.name, 0, field_padding, .Const);
+            print_indent(p, 1);
             if v.value != nil
             {
                 pprintf(p, "%*s = ", field_padding, renamed);

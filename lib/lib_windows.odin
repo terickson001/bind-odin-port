@@ -123,12 +123,14 @@ get_coff_symbols_lib :: proc(file: os.Handle, lib: ^Lib)
     {
         header, ok := read_archive_header(file);
         
-        sz, size_ok := strconv.parse_i64(string(header.size[:]), 10);
-        if !size_ok
-        {
-            fmt.eprintf("ERROR: Could not read first linker member size\n");
-            return;
-        }
+        sz, _ := strconv.parse_i64(string(header.size[:]), 10);
+        /*
+                if !size_ok
+                {
+                    fmt.eprintf("ERROR: Could not read first linker member size (%s, %d)\n", header.size, sz);
+                    return;
+                }
+                */
         
         sz = sz + sz%2;
         os.seek(file, sz, SEEK_CUR);
@@ -226,7 +228,7 @@ get_coff_symbols_import_long :: proc(file: os.Handle, lib: ^Lib, offset: u32)
     header: Coff_Header;
     os.read_ptr(file, &header, size_of(header));
     
-    string_table_offset := header.symtbl_offset + (header.num_symbols + size_of(Coff_Symbol));
+    string_table_offset := header.symtbl_offset + (header.num_symbols * size_of(Coff_Symbol));
     string_table_length: u32;
     os.seek(file, i64(offset + string_table_offset), SEEK_SET);
     os.read_ptr(file, &string_table_length, 4);
@@ -402,7 +404,7 @@ Coff_Linum :: struct
     linum: u16,
 }
 
-Coff_Symbol :: struct
+Coff_Symbol :: struct #packed
 {
     name: Coff_Sym_Name,
     value: i32,

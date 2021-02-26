@@ -339,7 +339,7 @@ lex_char :: proc(using lexer: ^Lexer) -> (token: Token)
     
     if data[idx] != '\'' 
     {
-        error(&token, "Expected ', got %c", data[idx]);
+        error(&token, "Expected ('), got (%c)", data[idx]);
         os.exit(1);
     }
     idx += 1; // '

@@ -45,7 +45,6 @@ get_predefined_macros :: proc(using pp: ^Preprocessor, info: lib.System_Info) ->
     
     startup_info: windows.STARTUPINFO;
     startup_info.cb = size_of(startup_info);
-    fmt.println("COMMAND:", windows.utf16_to_utf8(wcommand));
     process_info: windows.PROCESS_INFORMATION;
     
     if windows.CreateProcessW(nil, &wcommand[0], nil, nil, true, 0, nil, nil, &startup_info, &process_info)
@@ -64,8 +63,6 @@ get_predefined_macros :: proc(using pp: ^Preprocessor, info: lib.System_Info) ->
     _, ok := preprocess_fd(pp, fd);
     
     os.close(fd);
-    
-    fmt.println(pp.macros);
     
     return true;
 }

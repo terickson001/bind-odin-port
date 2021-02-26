@@ -277,7 +277,7 @@ check_file :: proc(using c: ^Checker, file: ast.File)
                 {
                     case ast.Enum_Type: do_check = true;
                 }
-                if !strings.has_prefix(loc.filename, config.global_config.root) do do_check = false;
+                if config.global_config.root != "" && !strings.has_prefix(loc.filename, config.global_config.root) do do_check = false;
             }
             if do_check do check_declaration(c, decl);
         }

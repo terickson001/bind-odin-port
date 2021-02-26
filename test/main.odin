@@ -28,33 +28,68 @@ main :: proc()
         };
     */
     
+    /*
+        config := bind.Config{
+            // General
+            root = "/usr/include/SDL2",
+            files = []string{"SDL.h"},
+            output = "out/",
+            
+            // Preprocess
+            include_dirs = []string{},
+            
+            // Bind
+            package_name = "sdl",
+            libraries = []string{"libSDL2.so"},
+            
+            use_cstring = true,
+            use_odin_enum = false,
+            
+            separate_output = false,
+            
+            var_prefix   = "SDL",
+            type_prefix  = "SDL",
+            proc_prefix  = "SDL",
+            const_prefix = "SDL",
+            
+            var_case   = .Snake,
+            type_case  = .Ada,
+            proc_case  = .Snake,
+            const_case = .Screaming_Snake,
+        };
+        */
+    
     config := bind.Config{
         // General
-        root = "/usr/include/SDL2",
-        files = []string{"SDL.h"},
+        root = "C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.18362.0\\um",
+        files = []string{"D3d12.h"},
         output = "out/",
         
         // Preprocess
         include_dirs = []string{},
         
         // Bind
-        package_name = "sdl",
-        libraries = []string{"libSDL2.so"},
+        package_name = "d3d12",
+        libraries = []string{"D3d12.lib"},
         
         use_cstring = true,
         use_odin_enum = false,
         
         separate_output = false,
         
-        var_prefix   = "SDL",
-        type_prefix  = "SDL",
-        proc_prefix  = "SDL",
-        const_prefix = "SDL",
+        /*
+                var_prefix   = "SDL",
+                type_prefix  = "SDL",
+                proc_prefix  = "SDL",
+                const_prefix = "SDL",
+                */
         
-        var_case   = .Snake,
-        type_case  = .Ada,
-        proc_case  = .Snake,
-        const_case = .Screaming_Snake,
+        /*
+                var_case   = .Snake,
+                type_case  = .Ada,
+                proc_case  = .Snake,
+                const_case = .Screaming_Snake,
+        */
     };
     
     bind.generate(config);

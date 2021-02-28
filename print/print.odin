@@ -321,6 +321,15 @@ set_padding :: proc(using p: ^Printer, syms: []^Symbol)
     }
 }
 
+print_macro :: proc(using p: ^Printer, node: ^Node, indent: int)
+{
+    v := node.derived.(ast.Macro);
+    print_ident(p, v.name, indent, 0, .Const);
+    pprintf(p, " :: ");
+    print_expr(p, v.value, 0);
+    pprintf(p, ";\n");
+}
+
 print_symbols :: proc(using p: ^Printer, filepath: string, syms: []^Symbol)
 {
     fmt.printf("%s: %d Symbols\n", filepath, len(syms));
@@ -337,6 +346,15 @@ print_symbols :: proc(using p: ^Printer, filepath: string, syms: []^Symbol)
     set_padding(p, syms);
     
     pprintf(p, "package %s\n\nimport _c \"core:c\"\n\n", config.global_config.package_name);
+    
+    pprintf(p, "/* Macros */\n\n");
+    for sym in syms
+    {
+        if sym.kind == .Const && sym.type != &type.type_invalid
+        {
+            print_macro(p, sym.decl, 0);
+        }
+    }
     
     for sym in syms
     {
@@ -378,6 +396,7 @@ print_symbols :: proc(using p: ^Printer, filepath: string, syms: []^Symbol)
         {
             pprintf(p, "foreign import %s \"%s\"\n\n", l.name, l.path);
         }
+        
         if has_vars
         {
             pprintf(p, "/* Variables */\n");
@@ -677,6 +696,18 @@ print_function_type :: proc(using p: ^Printer, node: ^Node, indent: int)
     }
 }
 
+print_basic_lit :: proc(using p: ^Printer, node: ^Node, indent: int)
+{
+    lit := node.derived.(ast.Basic_Lit);
+    value := lit.token.value;
+    switch v in value.val
+    {
+        case u64: pprintf(p, "%d", v);
+        case f64: pprintf(p, "%f", v);
+        case string: pprintf(p, "%q", v);
+    }
+}
+
 print_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
 {
     switch v in node.derived
@@ -693,7 +724,7 @@ print_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
         case ast.Struct_Type:   print_type         (p, node, indent);
         case ast.Union_Type:    print_type         (p, node, indent);
         case ast.Enum_Type:     print_type         (p, node, indent);
-        case ast.Basic_Lit:     print_string       (p, v.token.text, indent);
+        case ast.Basic_Lit:     print_basic_lit    (p, node, indent);
         
         case ast.Ident:
         kind: ast.Symbol_Kind;

@@ -61,7 +61,8 @@ make_lexer_fd :: proc(fd: os.Handle) -> (lexer: Lexer, ok: bool)
         return lexer, false;
     }
     
-    filename = strings.clone("<Handle>");
+    info, _ := os.fstat(fd, context.temp_allocator);
+    filename = strings.clone(info.fullpath);
     column = 0;
     line   = 1;
     bol    = true;
@@ -171,11 +172,6 @@ lex_number :: proc(using lexer: ^Lexer) -> (token: Token)
     
     num_str := string(data[num_start:idx]);
     
-    ok: bool;
-    if token.kind == .Float do token.value.val, ok = strconv.parse_f64(num_str);
-    else do token.value.val, ok = strconv.parse_u64(num_str, base);
-    if !ok do error(&token, "Invalid constant");
-    
     longs := 0;
     f_suffix := false;
     loop: for idx < len(data)
@@ -218,6 +214,12 @@ lex_number :: proc(using lexer: ^Lexer) -> (token: Token)
                 case: error(&token, "Invalid integer suffix");
             }
             
+            case 'e':
+            idx += 1;
+            if data[idx] == '-' do idx += 1;
+            for '0' <= data[idx] && data[idx] <= '9' do idx += 1;
+            num_str = string(data[num_start:idx]);
+            
             case:
             break loop;
         }
@@ -225,6 +227,9 @@ lex_number :: proc(using lexer: ^Lexer) -> (token: Token)
     
     if token.kind == .Integer
     {
+        ok: bool;
+        token.value.val, ok = strconv.parse_u64(num_str, base);
+        if !ok do error(&token, "Invalid integer literal");
         switch longs
         {
             case 0: if token.value.size == 0 do token.value.size = 4;
@@ -234,6 +239,9 @@ lex_number :: proc(using lexer: ^Lexer) -> (token: Token)
     }
     else
     {
+        ok: bool;
+        token.value.val, ok = strconv.parse_f64(num_str);
+        if !ok do error(&token, "Invalid float literal");
         if f_suffix do token.value.size = 4;
         else do token.value.size = 8;
     }
@@ -261,6 +269,7 @@ lex_string :: proc(using lexer: ^Lexer) -> (token: Token)
         idx += 1;
     }
     token.text = string(data[start:idx]);
+    token.value.val = string(data[start+1:idx-1]);
     return token;
 }
 

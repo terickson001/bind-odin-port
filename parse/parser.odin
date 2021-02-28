@@ -6,6 +6,7 @@ import "core:strings"
 
 import "../ast"
 import "../lex"
+import pp "../preprocess"
 
 @private
 Token :: lex.Token;
@@ -23,6 +24,8 @@ Parser :: struct
     curr_decl: ^Node,
     
     file: ast.File,
+    
+    do_not_err: bool,
 }
 
 make_parser :: proc(tokens: ^Token) -> Parser
@@ -52,22 +55,10 @@ allow :: proc(using p: ^Parser, k: lex.Token_Kind) -> ^Token
     return nil;
 }
 
-allow_one :: proc(using p: ^Parser, kinds: ..lex.Token_Kind) -> ^Token
-{
-    t: ^Token;
-    for k in kinds
-    {
-        t = allow(p, k);
-        if t != nil do break;
-    }
-    
-    return t;
-}
-
 expect :: proc(using p: ^Parser, k: lex.Token_Kind, loc := #caller_location) -> ^Token
 {
     t := allow(p, k);
-    if t == nil
+    if t == nil && !do_not_err
     {
         lex.error(tokens, "Expected %q, got %q\n-- Called from %#v\n", lex.TOKEN_STRINGS[k], lex.TOKEN_STRINGS[tokens.kind], loc);
         os.exit(1);
@@ -103,7 +94,20 @@ parse_file :: proc(using p: ^Parser)
         
         ast.appendv(&curr_decl, n);
     }
-    file.decls = file.decls.next;
+    // file.decls = file.decls.next;
+}
+
+parse_macro :: proc(using p: ^Parser, macro: pp.Macro) -> ^Node
+{
+    p.tokens = macro.body;
+    p.do_not_err = true;
+    value := parse_expression(p);
+    if value != nil
+    {
+        name := ast.make(ast.Ident{{}, macro.name});
+        return ast.make(ast.Macro{{}, name, value});
+    }
+    return nil;
 }
 
 parse_typedef :: proc(using p: ^Parser) -> ^Node
@@ -159,6 +163,7 @@ parse_string :: proc(using p: ^Parser) -> ^Node
 
 op_precedence :: proc(op: ^Token) -> int
 {
+    if op == nil do return 0;
     #partial switch op.kind
     {
         case .Mul, .Quo, .Mod: return 13;
@@ -251,7 +256,7 @@ parse_postfix_expr :: proc(using p: ^Parser) -> ^Node
 {
     expr := parse_operand(p);
     
-    loop: for
+    loop: for tokens != nil
     {
         #partial switch tokens.kind
         {
@@ -282,6 +287,7 @@ try_type_expr :: proc(using p: ^Parser) -> ^Node
 
 parse_unary_expr :: proc(using p: ^Parser, parent_is_sizeof := false) -> ^Node
 {
+    if tokens == nil do return nil;
     expr: ^Node;
     is_sizeof := false;
     #partial switch tokens.kind
@@ -328,6 +334,7 @@ parse_ternary_expr :: proc(using p: ^Parser, cond: ^Node) -> ^Node
 
 parse_binary_expr :: proc(using p: ^Parser, max_prec: int) -> ^Node
 {
+    if tokens == nil do return nil;
     expr := parse_unary_expr(p);
     for prec := op_precedence(tokens); prec >= max_prec; prec -= 1
     {
@@ -345,7 +352,11 @@ parse_binary_expr :: proc(using p: ^Parser, max_prec: int) -> ^Node
             else
             {
                 rhs := parse_binary_expr(p, prec+1);
-                if rhs == nil do lex.error(op, "Expected expression after binary operator");
+                if rhs == nil 
+                {
+                    if !do_not_err do lex.error(op, "Expected expression after binary operator");
+                    return nil;
+                }
                 expr = ast.make(ast.Binary_Expr{{}, op, expr, rhs});
             }
         }

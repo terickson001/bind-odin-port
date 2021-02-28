@@ -23,6 +23,8 @@ make :: proc(variant: $T) -> ^T
 
 append :: inline proc(list: ^^Node, n: ^Node)
 {
+    assert(list != nil);
+    assert(list^ != nil);
     list^.next = n;
     list^ = list^.next;
 }
@@ -292,6 +294,13 @@ Var_Decl_Kind :: enum u8
     Typedef,
 }
 
+Macro :: struct
+{
+    using node: Node,
+    name: ^Node,
+    value: ^Node,
+}
+
 Var_Decl :: struct
 {
     using node: Node,
@@ -434,6 +443,7 @@ node_token :: proc(node: ^Node) -> ^Token
         case Enum_Type: return v.token;
         case Function_Type: return node_token(v.ret_type);
         case Bitfield_Type: return node_token(v.type_expr);
+        case Macro: return node_token(v.name);
     }
     
     return nil;

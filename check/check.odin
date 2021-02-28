@@ -90,6 +90,22 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node)
     {
         switch v in decl.derived
         {
+            case ast.Macro:
+            name := ast.ident(v.name);
+            if name not_in symbols
+            {
+                symbol := ast.make_symbol(name, decl);
+                symbol.uid = sym_id;
+                sym_id += 1;
+                symbol.kind = .Const;
+                // fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
+                symbols[name] = symbol;
+            }
+            else
+            {
+                decl.symbol = symbols[name];
+            }
+            
             case ast.Typedef:
             for var := v.var_list; var != nil; var = var.next
             {
@@ -261,12 +277,15 @@ check_file :: proc(using c: ^Checker, file: ast.File)
     for decl := file.decls; decl != nil; decl = decl.next
     {
         loc := ast.node_location(decl);
-        if decl.symbol != nil && !is_exported(decl.symbol) do continue;
+        
         
         switch v in decl.derived
         {
-            case ast.Function_Decl: check_declaration(c, decl);
-            case ast.Var_Decl: check_declaration(c, decl);
+            case ast.Function_Decl, ast.Var_Decl: 
+            if decl.symbol != nil && !is_exported(decl.symbol) do continue;
+            check_declaration(c, decl);
+            
+            // case ast.Var_Decl: check_declaration(c, decl);
             case ast.Typedef:
             do_check := false;
             for var := v.var_list; var != nil; var = var.next
@@ -280,6 +299,14 @@ check_file :: proc(using c: ^Checker, file: ast.File)
                 if config.global_config.root != "" && !strings.has_prefix(loc.filename, config.global_config.root) do do_check = false;
             }
             if do_check do check_declaration(c, decl);
+            
+            case ast.Macro:
+            loc := ast.node_location(v.name);
+            fmt.printf("MACRO: %q\n", ast.ident(v.name));
+            if config.global_config.root == "" || strings.has_prefix(loc.filename, config.global_config.root)
+            {
+                check_declaration(c, decl);
+            }
         }
     }
 }
@@ -290,6 +317,16 @@ check_declaration :: proc(using c: ^Checker, decl: ^Node)
     if decl.symbol != nil do decl.symbol.used = true;
     switch v in &decl.derived
     {
+        case ast.Macro:
+        op := check_expr(c, v.value);
+        if v.value.type == nil || !op.const do v.value.type = &type.type_invalid;
+        decl.type = v.value.type;
+        decl.symbol.type = v.value.type;
+        
+        if op.const do fmt.printf("SUCCESS: %q\n", ast.ident(v.name));
+        else do fmt.printf("FAILURE: %q\n", ast.ident(v.name));
+        if op.const do decl.symbol.const_val = cast(ast.Value)op.val;
+        
         case ast.Var_Decl:
         if v.kind == .VaArgs
         {
@@ -351,6 +388,10 @@ value_operand :: proc(value: lex.Value) -> Operand
     op.const = true;
     switch v in value.val
     {
+        case string:
+        op.type = type.pointer_type(&type.type_char);
+        op.val = value.val.(string);
+        
         case u64:
         switch value.size
         {
@@ -410,6 +451,7 @@ value_operand :: proc(value: lex.Value) -> Operand
             {
                 op.type = &type.type_i64;
                 op.val = cast(i64)value.val.(u64);
+                fmt.println(op.val);
             }
         }
         
@@ -435,7 +477,7 @@ Value :: union
     i64,
     f64,
     uintptr,
-    ^Type,
+    string,
 }
 
 Operand :: struct
@@ -493,7 +535,8 @@ eval_unary_op :: proc(operator: ^Token, op: Operand) -> Operand
         
         case .BitNot:
         require_type(operator, op.type, {.Integer});
-        ret.val = ~op.val.(u64);
+        if type.is_signed(op.type) do ret.val = ~op.val.(i64);
+        else                       do ret.val = ~op.val.(u64);
         
         case ._sizeof:
         ret.val = cast(i64)op.type.size;
@@ -818,6 +861,12 @@ check_expr :: proc(using c: ^Checker, expr: ^Node) -> Operand
         case ast.Ident:
         symbol := check_name(c, expr);
         // fmt.println(ast.ident(expr));
+        if symbol == nil
+        {
+            op.type = &type.type_invalid;
+            expr.type = op.type;
+            return op;
+        }
         assert(symbol.type != nil);
         op.type = symbol.type;
         if symbol.const_val != nil
@@ -844,35 +893,37 @@ check_expr :: proc(using c: ^Checker, expr: ^Node) -> Operand
         check_type(c, v.type_expr);
         assert(v.type_expr.type != nil);
         op = check_expr(c, v.expr);
+        assert(v.expr.type != nil);
         // fmt.println("CASTING");
         // fmt.println(ast.node_location(v.type_expr));
         cast_operand(&op, v.type_expr.type);
+        expr.type = op.type;
         // fmt.println("DONE");
         
         case ast.Unary_Expr:
         op = check_expr(c, v.operand);
         expr.type = op.type;
+        if op.type == &type.type_invalid do return op;
         promote_operand(&op);
         op = eval_unary_op(v.op, op);
         
         case ast.Binary_Expr:
         lhs := check_expr(c, v.lhs);
         rhs := check_expr(c, v.rhs);
-        /*
-                fmt.println(lhs);
-                fmt.println(rhs);
-        */
-        // fmt.println(ast.node_token(v.lhs).text);
+        if lhs.type == &type.type_invalid do return lhs;
+        if rhs.type == &type.type_invalid do return rhs;
         balance_binary_operands(&lhs, &rhs);
         assert(lhs.type == rhs.type);
         expr.type = lhs.type;
-        // fmt.println(ast.node_location(v.lhs));
         op = eval_binary_op(v.op, lhs, rhs);
         
         case ast.Ternary_Expr:
         cond := check_expr(c, v.cond);
         then := check_expr(c, v.then);
         els_ := check_expr(c, v.els_);
+        if cond.type == &type.type_invalid do return cond;
+        if then.type == &type.type_invalid do return then;
+        if els_.type == &type.type_invalid do return els_;
         assert(then.type == els_.type);
         assert(type.is_integer(cond.type));
         
@@ -903,7 +954,7 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node)
         
         case ast.Ident:
         symbol := check_name(c, type_expr);
-        assert(symbol.type != nil);
+        assert(symbol != nil && symbol.type != nil);
         type_expr.type = symbol.type;
         
         case ast.Pointer_Type:
@@ -1112,11 +1163,13 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node)
 check_name :: proc(using c: ^Checker, ident: ^Node) -> ^Symbol
 {
     symbol := lookup_symbol(c, ident);
+    if symbol == nil do return symbol;
     if .Builtin not_in symbol.flags
     {
         resolve_symbol(c, symbol);
     }
     ident.symbol = symbol;
+    ident.type = symbol.type;
     return symbol;
 }
 
@@ -1133,8 +1186,11 @@ lookup_symbol :: proc(using c: ^Checker, ident: ^Node) -> ^Symbol
     {
         return symbol;
     }
-    lex.error(ast.node_token(ident), "Symbol %q not found", name);
-    os.exit(1);
+    return nil;
+    /*
+        lex.error(ast.node_token(ident), "Symbol %q not found", name);
+        os.exit(1);
+    */
 }
 
 resolve_symbol :: proc(using c: ^Checker, symbol: ^Symbol)

@@ -33,15 +33,16 @@ get_predefined_macros :: proc(using pp: ^Preprocessor, info: lib.System_Info) ->
     pclose(res);
     
     
+    
     fd, err := os.open("./temp/predef.h");
     if err != os.ERROR_NONE
     {
         fmt.eprintf("ERROR: Could not open \"temp/predef.h\"\n");
         return false;
     }
-    _, ok := preprocess_fd(pp, fd);
+    defer os.close(fd);
     
-    os.close(fd);
+    _, ok := preprocess_fd(pp, fd);
     
     return ok;
 }

@@ -31,6 +31,7 @@ Value :: struct
     {
         u64,
         f64,
+        string,
     }
 }
 

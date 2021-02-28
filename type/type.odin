@@ -166,6 +166,8 @@ Va_Arg :: struct {}
 @static type_intptr_t  := Type{size=size_of(c.intptr_t), variant=Primitive{.intptr_t, "intptr_t", {.Integer}}};
 @static type_wchar_t   := Type{size=size_of(c.wchar_t), variant=Primitive{.wchar_t, "wchar_t", {.Integer, .Unsigned}}};
 
+@static type_cstring: ^Type;
+
 @static primitive_types := [?]^Type
 {
     &type_void,

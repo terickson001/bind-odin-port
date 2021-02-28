@@ -13,6 +13,8 @@ import "lib"
 import "config"
 import "path"
 
+import "ast"
+
 Config :: config.Config;
 generate :: proc(user_config: Config)
 {
@@ -44,15 +46,28 @@ generate :: proc(user_config: Config)
         // Parse
         parser := parse.make_parser(out);
         parse.parse_file(&parser);
+        for k, v in preprocessor.macros
+        {
+            if macro_blacklist(v) do continue;
+            m := parse.parse_macro(&parser, v);
+            if m != nil do ast.append(&parser.curr_decl, m);
+            else do fmt.printf("PARSE: %q\n", v.name.text);
+        }
+        parser.file.decls = parser.file.decls.next;
         
         // Check
-        
         check.check_file(&checker, parser.file);
     }
     
     // Print
     printer := print.make_printer(checker.symbols);
     print.print_file(&printer);
+}
+
+macro_blacklist :: proc(m: pp.Macro) -> bool
+{
+    return m.params != nil || 
+        path.file_name(m.name.filename) == "predef.h";
 }
 
 print_tokens :: proc(path: string, tokens: ^lex.Token)

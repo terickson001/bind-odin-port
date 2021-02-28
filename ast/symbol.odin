@@ -21,6 +21,7 @@ Value :: union
     i64,
     f64,
     uintptr,
+    string,
 }
 
 Symbol :: struct

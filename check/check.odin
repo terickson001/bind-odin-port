@@ -302,7 +302,6 @@ check_file :: proc(using c: ^Checker, file: ast.File)
             
             case ast.Macro:
             loc := ast.node_location(v.name);
-            fmt.printf("MACRO: %q\n", ast.ident(v.name));
             if config.global_config.root == "" || strings.has_prefix(loc.filename, config.global_config.root)
             {
                 check_declaration(c, decl);
@@ -318,13 +317,11 @@ check_declaration :: proc(using c: ^Checker, decl: ^Node)
     switch v in &decl.derived
     {
         case ast.Macro:
+        name := ast.ident(v.name);
         op := check_expr(c, v.value);
         if v.value.type == nil || !op.const do v.value.type = &type.type_invalid;
         decl.type = v.value.type;
         decl.symbol.type = v.value.type;
-        
-        if op.const do fmt.printf("SUCCESS: %q\n", ast.ident(v.name));
-        else do fmt.printf("FAILURE: %q\n", ast.ident(v.name));
         if op.const do decl.symbol.const_val = cast(ast.Value)op.val;
         
         case ast.Var_Decl:
@@ -451,7 +448,6 @@ value_operand :: proc(value: lex.Value) -> Operand
             {
                 op.type = &type.type_i64;
                 op.val = cast(i64)value.val.(u64);
-                fmt.println(op.val);
             }
         }
         
@@ -894,11 +890,8 @@ check_expr :: proc(using c: ^Checker, expr: ^Node) -> Operand
         assert(v.type_expr.type != nil);
         op = check_expr(c, v.expr);
         assert(v.expr.type != nil);
-        // fmt.println("CASTING");
-        // fmt.println(ast.node_location(v.type_expr));
         cast_operand(&op, v.type_expr.type);
         expr.type = op.type;
-        // fmt.println("DONE");
         
         case ast.Unary_Expr:
         op = check_expr(c, v.operand);

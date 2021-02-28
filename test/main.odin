@@ -46,7 +46,7 @@ main :: proc()
             // General
             root = "/usr/include/X11",
             files = []string{"Xlib.h", "Xutil.h", "Xos.h", "Xatom.h"},
-            output = "out/",
+            output = "out",
             
             // Preprocess
             include_dirs = []string{},

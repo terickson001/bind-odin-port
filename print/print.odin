@@ -222,7 +222,6 @@ change_case :: proc(str: string, casing: config.Case, preserve_trailing_undersco
     {
         for _ in 0..<trailing_underscores do strings.write_byte(&b, '_');
     }
-    if casing == .Screaming do fmt.printf("%s -> %s\n", str, strings.to_string(b));
     return strings.to_string(b);
     
     to_upper :: proc(c: byte) -> byte
@@ -632,7 +631,6 @@ print_function_parameters :: proc(using p: ^Printer, node: ^Node)
 
 print_type :: proc(using p: ^Printer, node: ^Node, indent: int)
 {
-    // fmt.println(node.derived);
     switch v in node.derived
     {
         case ast.Array_Type:    print_array_type(p, node, 0);
@@ -648,7 +646,6 @@ print_type :: proc(using p: ^Printer, node: ^Node, indent: int)
         pprintf(p, "_c.%s", v.name);
         
         case ast.Pointer_Type:
-        // if ast.node_token(v.type_expr).text == "Uint8" do fmt.println(v.type_expr.derived);
         if node.type == type_rawptr
         {
             pprintf(p, "rawptr");
@@ -865,7 +862,6 @@ print_record :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: boo
         if !config.global_config.use_odin_enum do pprintf(p, "/* ");
         is_enum = true;
         enum_prefix = common_enum_prefix(p, fields);
-        fmt.printf("ENUM_PREFIX: %q\n", enum_prefix);
         if (name != nil || tpdef_name != "") && enum_prefix != ""
         {
             enum_name := name != nil ? ast.ident(name) : tpdef_name;

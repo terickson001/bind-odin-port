@@ -19,12 +19,9 @@ Parser :: struct
     node_idx: int,
     
     type_table: map[string]^Node,
-    opaque_types: map[string]^Node,
     
     curr_decl: ^Node,
-    
     file: ast.File,
-    
     do_not_err: bool,
 }
 

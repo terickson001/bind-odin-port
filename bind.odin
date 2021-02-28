@@ -33,6 +33,7 @@ generate :: proc(user_config: Config)
     config.global_config.libs = libs[:];
     
     checker: check.Checker;
+    type_table: map[string]^ast.Node;
     for file in config.global_config.files
     {
         // Preprocess
@@ -45,15 +46,16 @@ generate :: proc(user_config: Config)
         
         // Parse
         parser := parse.make_parser(out);
+        parser.type_table = type_table;
         parse.parse_file(&parser);
         for k, v in preprocessor.macros
         {
             if macro_blacklist(v) do continue;
             m := parse.parse_macro(&parser, v);
             if m != nil do ast.append(&parser.curr_decl, m);
-            else do fmt.printf("PARSE: %q\n", v.name.text);
         }
         parser.file.decls = parser.file.decls.next;
+        type_table = parser.type_table;
         
         // Check
         check.check_file(&checker, parser.file);

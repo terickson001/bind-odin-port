@@ -69,7 +69,8 @@ generate :: proc(user_config: Config)
 macro_blacklist :: proc(m: pp.Macro) -> bool
 {
     return m.params != nil || 
-        path.file_name(m.name.filename) == "predef.h";
+        path.file_name(m.name.filename) == "predef.h" ||
+        (config.global_config.root != "" && !strings.has_prefix(m.name.filename, config.global_config.root));
 }
 
 print_tokens :: proc(path: string, tokens: ^lex.Token)

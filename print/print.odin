@@ -349,9 +349,10 @@ print_symbols :: proc(using p: ^Printer, filepath: string, syms: []^Symbol)
     pprintf(p, "/* Macros */\n\n");
     for sym in syms
     {
-        if sym.kind == .Const && sym.type != &type.type_invalid
+        switch v in sym.decl.derived
         {
-            print_macro(p, sym.decl, 0);
+            case ast.Macro:
+            if sym.type != &type.type_invalid do print_macro(p, sym.decl, 0);
         }
     }
     
@@ -504,7 +505,7 @@ print_string :: proc(using p: ^Printer, str: string, indent: int, padding := 0, 
             }
             else
             {
-                fmt.eprintf("NOTE: Could not unprefix %q due to name collision\n", str);
+                fmt.eprintf("NOTE: Could not recase %q due to name collision\n", str);
                 str = unprefixed;
             }
         }
@@ -1005,8 +1006,12 @@ print_enum_fields :: proc(using p: ^Printer, node: ^Node, indent: int, prefix: s
             }
             else if prev != nil
             {
-                print_ident(p, prev.derived.(ast.Enum_Field).name, 0, 0, .Const);
-                pprintf(p, " + 1");
+                val := prev.symbol.const_val.(i64);
+                pprintf(p, "%d", val+1);
+                /*
+                                print_ident(p, prev.derived.(ast.Enum_Field).name, 0, 0, .Const);
+                                pprintf(p, " + 1");
+                */
             }
             else
             {

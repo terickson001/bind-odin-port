@@ -180,6 +180,7 @@ lex_number :: proc(using lexer: ^Lexer) -> (token: Token)
         {
             case 'f':
             f_suffix = true;
+            token.kind = .Float;
             idx += 1;
             
             case 'u', 'U':
@@ -215,6 +216,7 @@ lex_number :: proc(using lexer: ^Lexer) -> (token: Token)
             }
             
             case 'e':
+            token.kind = .Float;
             idx += 1;
             if data[idx] == '-' do idx += 1;
             for '0' <= data[idx] && data[idx] <= '9' do idx += 1;

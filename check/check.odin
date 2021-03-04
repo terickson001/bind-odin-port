@@ -700,6 +700,7 @@ balance_binary_operands :: proc(lhs, rhs: ^Operand)
     
     assert(lhs.type == rhs.type);
 }
+
 eval_binary_op :: proc(operator: ^Token, lhs, rhs: Operand) -> Operand
 {
     ret := lhs;

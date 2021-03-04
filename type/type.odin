@@ -146,10 +146,10 @@ Va_Arg :: struct {}
 @static type_double     := Type{size=size_of(c.double), variant=Primitive{.double,     "double",     {.Float}}};
 @static type_longdouble := Type{size=size_of(c.double), variant=Primitive{.longdouble, "longdouble", {.Float}}};
 
-@static type_u8  := Type{size=size_of(u8),  variant=Primitive{.u8,  "u8",  {.Integer}}};
-@static type_u16 := Type{size=size_of(u16), variant=Primitive{.u16, "u16", {.Integer}}};
-@static type_u32 := Type{size=size_of(u32), variant=Primitive{.u32, "u32", {.Integer}}};
-@static type_u64 := Type{size=size_of(u64), variant=Primitive{.u64, "u64", {.Integer}}};
+@static type_u8  := Type{size=size_of(u8),  variant=Primitive{.u8,  "u8",  {.Integer, .Unsigned}}};
+@static type_u16 := Type{size=size_of(u16), variant=Primitive{.u16, "u16", {.Integer, .Unsigned}}};
+@static type_u32 := Type{size=size_of(u32), variant=Primitive{.u32, "u32", {.Integer, .Unsigned}}};
+@static type_u64 := Type{size=size_of(u64), variant=Primitive{.u64, "u64", {.Integer, .Unsigned}}};
 
 @static type_i8  := Type{size=size_of(i8),  variant=Primitive{.i8,  "i8",  {.Integer}}};
 @static type_i16 := Type{size=size_of(i16), variant=Primitive{.i16, "i16", {.Integer}}};

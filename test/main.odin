@@ -89,10 +89,12 @@ main :: proc()
             proc_prefix  = "SDL",
             const_prefix = "SDL",
             
-            var_case   = .Snake,
-            type_case  = .Ada,
-            proc_case  = .Snake,
-            const_case = .Screaming_Snake,
+            /*
+                        var_case   = .Snake,
+                        type_case  = .Ada,
+                        proc_case  = .Snake,
+                        const_case = .Screaming_Snake,
+            */
         };
         
     }

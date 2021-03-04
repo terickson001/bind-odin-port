@@ -698,6 +698,23 @@ print_function_type :: proc(using p: ^Printer, node: ^Node, indent: int)
     }
 }
 
+print_char :: proc(using p: ^Printer, val: u64)
+{
+    switch val
+    {
+        case '\t':   pprintf(p, "'\\t'");
+        case '\r':   pprintf(p, "'\\r'");
+        case '\b':   pprintf(p, "'\\b'");
+        case '\\': pprintf(p, "'\\\\'");
+        case '\v':   pprintf(p, "'\\v'");
+        case '\e': pprintf(p, "'\\e'");
+        case '\f': pprintf(p, "'\\f'");
+        case '\a': pprintf(p, "'\a'");
+        case '\'': pprintf(p, "'\\''");
+        case: pprintf(p, "'%c'", val);
+    }
+}
+
 print_basic_lit :: proc(using p: ^Printer, node: ^Node, indent: int)
 {
     lit := node.derived.(ast.Basic_Lit);
@@ -705,11 +722,12 @@ print_basic_lit :: proc(using p: ^Printer, node: ^Node, indent: int)
     switch v in value.val
     {
         case u64: 
-        switch value.base
+        switch
         {
-            case 8: pprintf(p, "0o%o", v);
-            case 10: pprintf(p, "%d", v);
-            case 16: pprintf(p, "0x%X", v);
+            case bool(value.is_char): print_char(p, v);
+            case value.base == 8:     pprintf(p, "0o%o", v);
+            case value.base == 10:    pprintf(p, "%d",   v);
+            case value.base == 16:    pprintf(p, "0x%X", v);
         }
         case f64: pprintf(p, "%f", v);
         case string: pprintf(p, "%q", v);
@@ -1022,10 +1040,11 @@ print_enum_fields :: proc(using p: ^Printer, node: ^Node, indent: int, prefix: s
             else
             {
                 val := n.symbol.const_val.(i64);
+                if ast.ident(v.name) == "K_RETURN" do fmt.printf("K_RETURN: %d\n", val);
                 switch use_base
                 {
                     case 8:  pprintf(p, "0o%o", val);
-                    case 10: pprintf(p, "%d",   val);
+                    case: pprintf(p, "%d",   val);
                     case 16: pprintf(p, "0x%X", val);
                 }
                 /*

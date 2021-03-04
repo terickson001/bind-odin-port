@@ -323,7 +323,7 @@ set_padding :: proc(using p: ^Printer, syms: []^Symbol)
 print_macro :: proc(using p: ^Printer, node: ^Node, indent: int)
 {
     v := node.derived.(ast.Macro);
-    print_ident(p, v.name, indent, 0, .Const);
+    print_ident(p, v.name, indent, 0, .Const, true);
     pprintf(p, " :: ");
     print_expr(p, v.value, 0);
     pprintf(p, ";\n");
@@ -460,7 +460,7 @@ print_indent :: proc(using p: ^Printer, indent: int)
     for _ in 0..<indent do pprintf(p, "    ");
 }
 
-print_string :: proc(using p: ^Printer, str: string, indent: int, padding := 0, kind: ast.Symbol_Kind = nil)
+print_string :: proc(using p: ^Printer, str: string, indent: int, padding := 0, kind: ast.Symbol_Kind = nil, check_collision := false)
 {
     print_indent(p, indent);
     if renamed, found := specific_renames[str]; found
@@ -493,41 +493,45 @@ print_string :: proc(using p: ^Printer, str: string, indent: int, padding := 0, 
     
     unprefixed := remove_prefix(str, prefix);
     recased := change_case(unprefixed, casing);
-    orig, found := rename_map[recased];
-    if found && orig != str
+    if check_collision
     {
-        if recased != unprefixed
+        orig, found := rename_map[recased];
+        if found && orig != str
         {
-            orig, found := rename_map[unprefixed];
-            if found && orig != str
+            if recased != unprefixed
             {
-                fmt.eprintf("Note: Could not unprefix or recase %q due to name collision\n", str);
+                orig2, found := rename_map[unprefixed];
+                if found && orig2 != str
+                {
+                    fmt.eprintf("Note: Could not unprefix or recase %q due to name collision with %q\n", str, orig2);
+                }
+                else
+                {
+                    fmt.eprintf("NOTE: Could not recase %q due to name collision with %q %v\n", str, orig, orig == str);
+                    str = unprefixed;
+                }
             }
             else
             {
-                fmt.eprintf("NOTE: Could not recase %q due to name collision\n", str);
-                str = unprefixed;
+                fmt.eprintf("NOTE: Could not unprefix or recase %q due to name collision with %q\n", str, orig);
             }
         }
         else
         {
-            fmt.eprintf("NOTE: Could not unprefix or recase %q due to name collision\n", str);
+            str = recased;
         }
+        rename_map[strings.clone(str)] = original_str;
     }
-    else
-    {
-        str = recased;
-    }
-    rename_map[str] = original_str;
+    
     rename, renamed := reserved_words[str];
     if renamed do str = rename;
     if padding != 0 do pprintf(p, "%*s", padding, str);
     else do pprintf(p, "%s", str);
 }
 
-print_ident :: proc(using p: ^Printer, node: ^Node, indent: int, padding := 0, kind: ast.Symbol_Kind = nil)
+print_ident :: proc(using p: ^Printer, node: ^Node, indent: int, padding := 0, kind: ast.Symbol_Kind = nil, check_collision := false)
 {
-    print_string(p, ast.ident(node), indent, padding, kind);
+    print_string(p, ast.ident(node), indent, padding, kind, check_collision);
 }
 
 print_node :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: bool, indent_first: bool)
@@ -567,7 +571,7 @@ print_function :: proc(using p: ^Printer, node: ^Node, indent: int)
     name := node.derived.(ast.Function_Decl).name;
     name_padding := proc_name_padding;
     
-    print_ident(p, name, 0, name_padding, .Func);
+    print_ident(p, name, 0, name_padding, .Func, true);
     pprintf(p, " :: proc");
     print_calling_convention(p, node.derived.(ast.Function_Decl).type_expr.derived.(ast.Function_Type).callconv);
     print_function_parameters(p, node.derived.(ast.Function_Decl).type_expr.derived.(ast.Function_Type).params);
@@ -641,7 +645,7 @@ print_type :: proc(using p: ^Printer, node: ^Node, indent: int)
         case ast.Struct_Type:   print_node(p, node, indent, false, false);
         case ast.Union_Type:    print_node(p, node, indent, false, false);
         case ast.Enum_Type:     print_node(p, node, indent, false, false);
-        case ast.Ident:         print_ident(p, node, indent, 0, .Type);
+        case ast.Ident:         print_ident(p, node, indent, 0, .Type, true);
         case ast.Numeric_Type:  
         print_indent(p, indent);
         pprintf(p, "_c.%s", v.name);
@@ -700,7 +704,13 @@ print_basic_lit :: proc(using p: ^Printer, node: ^Node, indent: int)
     value := lit.token.value;
     switch v in value.val
     {
-        case u64: pprintf(p, "%d", v);
+        case u64: 
+        switch value.base
+        {
+            case 8: pprintf(p, "0o%o", v);
+            case 10: pprintf(p, "%d", v);
+            case 16: pprintf(p, "0x%X", v);
+        }
         case f64: pprintf(p, "%f", v);
         case string: pprintf(p, "%q", v);
     }
@@ -727,7 +737,7 @@ print_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
         case ast.Ident:
         kind: ast.Symbol_Kind;
         if node.symbol != nil do kind = node.symbol.kind;
-        print_ident(p, node, indent, 0, kind);
+        print_ident(p, node, indent, 0, kind, true);
     }
 }
 
@@ -879,12 +889,12 @@ print_record :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: boo
     {
         if top_level 
         {
-            print_ident(p, name, 0, 0, .Type);
+            print_ident(p, name, 0, 0, .Type, true);
             pprintf(p, " :: ");
         }
         else if fields == nil
         {
-            print_ident(p, name, 0, 0, .Type);
+            print_ident(p, name, 0, 0, .Type, true);
             return;
         }
     }
@@ -901,7 +911,7 @@ print_record :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: boo
         }
         else
         {
-            print_string(p, enum_prefix, 0, 0, .Type);
+            print_string(p, enum_prefix, 0, 0, .Type, true);
             pprintf(p, " :: ");
         }
     }
@@ -995,27 +1005,33 @@ print_enum_fields :: proc(using p: ^Printer, node: ^Node, indent: int, prefix: s
         }
         
         prev: ^Node;
+        use_base := u8(10);
         for n := node; n != nil; n = n.next
         {
             v := n.derived.(ast.Enum_Field);
-            print_ident(p, v.name, 0, field_padding, .Const);
+            print_ident(p, v.name, 0, field_padding, .Const, true);
             pprintf(p, " :: ");
             if v.value != nil
             {
+                switch lit in v.value.derived
+                {
+                    case ast.Basic_Lit: use_base = lit.token.value.base;
+                }
                 print_expr(p, v.value, 0);
             }
-            else if prev != nil
+            else
             {
-                val := prev.symbol.const_val.(i64);
-                pprintf(p, "%d", val+1);
+                val := n.symbol.const_val.(i64);
+                switch use_base
+                {
+                    case 8:  pprintf(p, "0o%o", val);
+                    case 10: pprintf(p, "%d",   val);
+                    case 16: pprintf(p, "0x%X", val);
+                }
                 /*
                                 print_ident(p, prev.derived.(ast.Enum_Field).name, 0, 0, .Const);
                                 pprintf(p, " + 1");
                 */
-            }
-            else
-            {
-                pprintf(p, "0");
             }
             
             pprintf(p, ";\n");
@@ -1071,7 +1087,7 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
         case .Typedef:
         typedef = true;
         name := ast.var_ident(node);
-        print_string(p, name, 0, 0, .Type);
+        print_string(p, name, 0, 0, .Type, true);
         pprintf(p, " :: ");
         switch t in v.type_expr.derived
         {
@@ -1112,7 +1128,7 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
         case .Variable:
         if !top_level do break;
         name := ast.var_ident(node);
-        print_string(p, name, 0, p.var_name_padding, .Var);
+        print_string(p, name, 0, p.var_name_padding, .Var, true);
         pprintf(p, " : ");
         
         case .Field:

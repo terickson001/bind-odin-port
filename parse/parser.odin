@@ -768,6 +768,8 @@ parse_parameter :: proc(using p: ^Parser) -> ^Node
     name: ^Node;
     type := parse_type(p, &name);
     
+    for tokens.kind == .___attribute__ do parse_attributes(p);
+    
     var_kind: ast.Var_Decl_Kind = name != nil ? .Parameter : .AnonParameter;
     return ast.make(ast.Var_Decl{{}, type, name, var_kind});
 }

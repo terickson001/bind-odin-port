@@ -15,7 +15,6 @@ import "../path"
 
 get_predefined_macros :: proc(using pp: ^Preprocessor, info: lib.System_Info) -> bool
 {
-    
     command: cstring;
     switch info.compiler
     {

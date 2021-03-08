@@ -12,7 +12,7 @@ import "core:strconv"
 import "../file"
 import "../path"
 
-GCC_ROOT :: "/usr/lib/gcc/x86_64-pc-linux-gnu";
+GCC_ROOT :: "/usr/lib/gcc";
 CLANG_ROOT :: "/usr/lib/clang";
 
 init_system_directories :: proc(allocator := context.allocator)
@@ -39,45 +39,52 @@ init_system_directories :: proc(allocator := context.allocator)
 @(private="file")
 get_gcc_directories :: proc(allocator := context.allocator) -> []string
 {
-    versions := read_dir(GCC_ROOT);
-    if versions == nil do return nil;
-    slice.sort_by(versions, version_sort);
-    
+    platforms := read_dir(GCC_ROOT);
     include := make([dynamic]string, allocator);
-    
-    got_include := false;
-    buf: [2048]byte;
-    path: string;
-    for version in versions
+    fmt.println("platforms:", platforms);
+    for platform in platforms
     {
-        path = fmt.bprintf(buf[:], "%s/%s", version, "include");
-        if file.exists(path) 
+        if size_of(rawptr) == 8 && !strings.has_prefix(platform[len(GCC_ROOT)+1:], "x86_64") do continue;
+        if size_of(rawptr) == 4 && strings.has_prefix(platform[len(GCC_ROOT)+1:], "x86_64") do continue;
+        
+        versions := read_dir(platform);
+        if versions == nil do return nil;
+        slice.sort_by(versions, version_sort);
+        
+        got_include := false;
+        buf: [2048]byte;
+        path: string;
+        for version in versions
         {
-            got_include = true;
-            append(&include, strings.clone(path, allocator));
+            path = fmt.bprintf(buf[:], "%s/%s", version, "include");
+            if file.exists(path) 
+            {
+                got_include = true;
+                append(&include, strings.clone(path, allocator));
+            }
+            
+            if got_include && file.exists("/usr/local/include")
+            {
+                append(&include, strings.clone("/usr/local/include", allocator));
+            }
+            
+            path = fmt.bprintf(buf[:], "%s/%s", version, "include-fixed");
+            if file.exists(path)
+            {
+                append(&include, strings.clone(path, allocator));
+            }
+            
+            if got_include && file.exists("/usr/include")
+            {
+                append(&include, strings.clone("/usr/include", allocator));
+            }
+            
+            if got_include do break;
         }
         
-        if got_include && file.exists("/usr/local/include")
-        {
-            append(&include, strings.clone("/usr/local/include", allocator));
-        }
-        
-        path = fmt.bprintf(buf[:], "%s/%s", version, "include-fixed");
-        if file.exists(path)
-        {
-            append(&include, strings.clone(path, allocator));
-        }
-        
-        if got_include && file.exists("/usr/include")
-        {
-            append(&include, strings.clone("/usr/include", allocator));
-        }
-        
-        if got_include do break;
+        for v in versions do delete(v);
+        delete(versions);
     }
-    
-    for v in versions do delete(v);
-    delete(versions);
     
     return include[:];
     

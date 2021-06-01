@@ -890,6 +890,7 @@ check_expr :: proc(using c: ^Checker, expr: ^Node) -> Operand
         check_type(c, v.type_expr);
         assert(v.type_expr.type != nil);
         op = check_expr(c, v.expr);
+        fmt.println(ast.node_location(v.expr));
         assert(v.expr.type != nil);
         cast_operand(&op, v.type_expr.type);
         expr.type = op.type;

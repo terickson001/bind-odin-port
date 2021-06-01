@@ -418,7 +418,7 @@ parse_macro_arg :: proc(using pp: ^Preprocessor, param: ^Macro_Param) -> ^Macro_
     return arg;
 }
 
-is_valid_ident :: inline proc(tok: ^Token) -> bool
+is_valid_ident :: #force_inline proc(tok: ^Token) -> bool
 {
     return tok.kind == .Ident || (tok.kind >= .__KEYWORD_BEGIN && tok.kind <= .__KEYWORD_END);
 }

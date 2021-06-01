@@ -310,12 +310,16 @@ set_padding :: proc(using p: ^Printer, syms: []^Symbol)
         if v.kind == .Var
         {
             name := ast.var_ident(v.decl);
-            var_name_padding = max(var_name_padding, len(name));
+            renamed, changed := try_rename(p, name, .Var, true);
+            var_link_padding = max(var_link_padding, len(name));
+            var_name_padding = max(var_name_padding, len(renamed));
         }
         else if v.kind == .Func
         {
             name := ast.ident(v.decl.derived.(ast.Function_Decl).name);
-            proc_name_padding = max(proc_name_padding, len(name));
+            renamed, changed := try_rename(p, name, .Func, true);
+            proc_link_padding = max(proc_link_padding, len(name));
+            proc_name_padding = max(proc_name_padding, len(renamed));
         }
     }
 }
@@ -460,19 +464,25 @@ print_indent :: proc(using p: ^Printer, indent: int)
     for _ in 0..<indent do pprintf(p, "    ");
 }
 
-print_string :: proc(using p: ^Printer, str: string, indent: int, padding := 0, kind: ast.Symbol_Kind = nil, check_collision := false)
+Rename_Result :: enum u8
 {
-    print_indent(p, indent);
+    None,
+    Specific,
+    Unprefixed,
+    Recased,
+    Reserved,
+}
+
+try_rename :: proc(using p: ^Printer, str: string, kind: ast.Symbol_Kind = nil, check_collision := false) -> (string, Rename_Result)
+{
     if renamed, found := specific_renames[str]; found
     {
-        if padding != 0 do pprintf(p, "%*s", padding, renamed);
-        else do pprintf(p, "%s", renamed);
-        return;
+        return renamed, .Specific;
     }
     
+    str := str;
     original_str := str;
     
-    str := str;
     prefix: string;
     casing: config.Case;
     #partial switch kind
@@ -491,6 +501,7 @@ print_string :: proc(using p: ^Printer, str: string, indent: int, padding := 0, 
         casing = config.global_config.type_case;
     }
     
+    result: Rename_Result;
     unprefixed := remove_prefix(str, prefix);
     recased := change_case(unprefixed, casing);
     if check_collision
@@ -509,6 +520,7 @@ print_string :: proc(using p: ^Printer, str: string, indent: int, padding := 0, 
                 {
                     fmt.eprintf("NOTE: Could not recase %q due to name collision with %q %v\n", str, orig, orig == str);
                     str = unprefixed;
+                    result = unprefixed != original_str ? .Unprefixed : .None;
                 }
             }
             else
@@ -519,14 +531,30 @@ print_string :: proc(using p: ^Printer, str: string, indent: int, padding := 0, 
         else
         {
             str = recased;
+            result = recased != unprefixed ? .Recased : (unprefixed != original_str ? .Unprefixed : .None);
         }
         rename_map[strings.clone(str)] = original_str;
     }
-    
+    else
+    {
+        str = recased;
+        result = recased != unprefixed ? .Recased : (unprefixed != original_str ? .Unprefixed : .None);
+    }
     rename, renamed := reserved_words[str];
-    if renamed do str = rename;
-    if padding != 0 do pprintf(p, "%*s", padding, str);
-    else do pprintf(p, "%s", str);
+    if renamed
+    {
+        str = rename;
+        result = .Reserved;
+    }
+    return str, result;
+}
+
+print_string :: proc(using p: ^Printer, str: string, indent: int, padding := 0, kind: ast.Symbol_Kind = nil, check_collision := false)
+{
+    print_indent(p, indent);
+    rename, _ := try_rename(p, str, kind, check_collision);
+    if padding != 0 do pprintf(p, "%*s", padding, rename);
+    else do pprintf(p, "%s", rename);
 }
 
 print_ident :: proc(using p: ^Printer, node: ^Node, indent: int, padding := 0, kind: ast.Symbol_Kind = nil, check_collision := false)
@@ -569,7 +597,13 @@ print_function :: proc(using p: ^Printer, node: ^Node, indent: int)
     print_indent(p, indent);
     
     name := node.derived.(ast.Function_Decl).name;
-    name_padding := proc_name_padding;
+    name_padding := proc_name_padding + proc_link_padding;
+    
+    if config.global_config.proc_case != nil
+    {
+        pprintf(p, "@(link_name=%q) ", ast.ident(name));
+        // name_padding -= proc_link_padding;
+    }
     
     print_ident(p, name, 0, name_padding, .Func, true);
     pprintf(p, " :: proc");
@@ -1137,7 +1171,7 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
             case ast.Union_Type:
             r_name: string;
             if t.name != nil do r_name = ast.ident(t.name);
-            if name == r_name && t.fields == nil && v.type_expr.symbol != nil && v.type_expr.symbol.decl.derived.(ast.Struct_Type).fields == nil
+            if name == r_name && t.fields == nil && v.type_expr.symbol != nil && v.type_expr.symbol.decl.derived.(ast.Union_Type).fields == nil
             {
                 pprintf(p, "union {{}");
                 return;
@@ -1147,7 +1181,13 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
         case .Variable:
         if !top_level do break;
         name := ast.var_ident(node);
-        print_string(p, name, 0, p.var_name_padding, .Var, true);
+        padding := var_name_padding + var_link_padding;
+        if config.global_config.var_case != nil
+        {
+            pprintf(p, "@(link_name=%q) ", name);
+            padding -= var_link_padding;
+        }
+        print_string(p, name, 0, padding, .Var, true);
         pprintf(p, " : ");
         
         case .Field:

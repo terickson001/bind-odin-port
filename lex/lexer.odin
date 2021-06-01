@@ -389,7 +389,7 @@ lex_block_comment :: proc(using lexer: ^Lexer) -> (token: Token)
             idx += 2;
             break;
         }
-        else if data [idx] == '\n'
+        else if data[idx] == '\n'
         {
             try_increment_line(lexer);
             continue;
@@ -575,6 +575,7 @@ run_lexer :: proc(lexer: ^Lexer, allocator := context.allocator) -> (^Token, boo
     head: Token;
     curr := &head;
     
+    next_is_first := false;
     token, ok := lex_token(lexer);
     for ok
     {
@@ -582,6 +583,15 @@ run_lexer :: proc(lexer: ^Lexer, allocator := context.allocator) -> (^Token, boo
         {
             curr.next = new_clone(token);
             curr = curr.next;
+            if next_is_first
+            {
+                curr.first_on_line = true;
+                next_is_first = false;
+            }
+        }
+        else if token.first_on_line
+        {
+            next_is_first = true;
         }
         token, ok = lex_token(lexer);
     }

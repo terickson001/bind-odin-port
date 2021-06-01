@@ -688,6 +688,8 @@ parse_integer_or_float_type :: proc(using p: ^Parser) -> ^Node
             case .___int32:   size = 4;
             case .___int64:   size = 8;
             
+            case ._const: break;
+            
             case: break loop;
         }
         advance(p);
@@ -867,7 +869,8 @@ parse_type_spec :: proc(using p: ^Parser, var_name: ^^Node, cc: ^^Token) -> ^Nod
         case .___ptr32, .___ptr64,
         ._static, ._extern, .___extension__,
         ._volatile, .___restrict,
-        ._inline, .___inline, .___inline__, .___forceinline:
+        ._inline, .___inline, .___inline__, .___forceinline,
+        .__Noreturn:
         advance(p);
         return parse_type_spec(p, var_name, cc);
         
@@ -997,7 +1000,7 @@ parse_decl :: proc(using p: ^Parser, var_kind: ast.Var_Decl_Kind) -> ^Node
             extension = true;
             advance(p);
             
-            case ._inline, .___inline, .___inline__, .___forceinline:
+            case ._inline, .___inline, .___inline__, .___forceinline, .__Noreturn:
             advance(p);
             
             case: break loop;

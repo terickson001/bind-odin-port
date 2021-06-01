@@ -42,6 +42,7 @@ main :: proc()
     }
     else
     {
+        
         /*
                 config := bind.Config{
                     // General
@@ -62,40 +63,103 @@ main :: proc()
                     type_prefix  = "X",
                     proc_prefix  = "X",
                     const_prefix = "X",
+                    
+                    proc_case = .Snake,
+                    var_case = .Snake,
                 };
         */
         
         
         config := bind.Config{
             // General
-            root = "/usr/include/SDL2",
-            files = []string{"SDL.h"},
-            output = "out/",
+            root = "/usr/include/openssl",
+            files = []string{"ssl.h", "err.h"},
+            output = "openssl",
             
             // Preprocess
             include_dirs = []string{},
             
             // Bind
-            package_name = "sdl",
-            libraries = []string{"libSDL2.so"},
-            
+            package_name = "ssl",
+            libraries = []string{"libssl.so"},
             use_cstring = true,
-            use_odin_enum = false,
+            separate_output = true,
             
-            separate_output = false,
-            
-            var_prefix   = "SDL",
-            type_prefix  = "SDL",
-            proc_prefix  = "SDL",
-            const_prefix = "SDL",
-            
-            /*
-                        var_case   = .Snake,
-                        type_case  = .Ada,
-                        proc_case  = .Snake,
-                        const_case = .Screaming_Snake,
-            */
+            var_prefix   = "SSL_",
+            type_prefix  = "SSL_",
+            proc_prefix  = "SSL_",
+            const_prefix = "SSL_",
         };
+        
+        
+        /*
+                config := bind.Config{
+                    // General
+                    root = "./test/",
+                    files = []string{"test.h"},
+                    output = "test",
+                    
+                    // Preprocess
+                    include_dirs = []string{},
+                    
+                    // Bind
+                    package_name = "test",
+                    libraries = []string{},
+                    use_cstring = true,
+                    separate_output = true,
+                };
+                */
+        
+        /*
+                config := bind.Config{
+                    // General
+                    root = "/usr/include/SDL2",
+                    files = []string{"SDL.h"},
+                    output = "sdl/",
+                    
+                    // Preprocess
+                    include_dirs = []string{},
+                    
+                    // Bind
+                    package_name = "sdl",
+                    libraries = []string{"libSDL2.so"},
+                    
+                    use_cstring = true,
+                    use_odin_enum = false,
+                    
+                    separate_output = false,
+                    
+                    var_prefix   = "SDL_",
+                    type_prefix  = "SDL_",
+                    proc_prefix  = "SDL_",
+                    const_prefix = "SDL_",
+                };
+        */
+        
+        
+        /*
+                config := bind.Config{
+                    // General
+                    root = "/usr/include/SDL2",
+                    files = []string{"SDL_net.h"},
+                    output = "sdl_net/",
+                    
+                    // Preprocess
+                    include_dirs = []string{},
+                    
+                    // Bind
+                    package_name = "sdl_net",
+                    libraries = []string{"libSDL2_net.so"},
+                    
+                    use_cstring = true,          
+                    separate_output = true,
+                    
+                    var_prefix   = "SDLNet_",
+                    type_prefix  = "SDLNet_",
+                    proc_prefix  = "SDLNet_",
+                    const_prefix = "SDLNet_",
+                };
+        */
         
     }
     

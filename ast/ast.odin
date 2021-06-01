@@ -21,7 +21,7 @@ make :: proc(variant: $T) -> ^T
     return n;
 }
 
-append :: inline proc(list: ^^Node, n: ^Node)
+append :: #force_inline proc(list: ^^Node, n: ^Node)
 {
     assert(list != nil);
     assert(list^ != nil);
@@ -29,7 +29,7 @@ append :: inline proc(list: ^^Node, n: ^Node)
     list^ = list^.next;
 }
 
-appendv :: inline proc(list: ^^Node, n: ^Node)
+appendv :: #force_inline proc(list: ^^Node, n: ^Node)
 {
     list^.next = n;
     for list^.next != nil do list^ = list^.next;

@@ -166,6 +166,7 @@ Token_Kind :: enum
     ___vectorcall,
     ___declspec,
     ___unaligned,
+    __Noreturn,
     
     __OPERATOR_BEGIN = Not,
     __OPERATOR_END   = Hash,
@@ -175,7 +176,7 @@ Token_Kind :: enum
     __COMPARE_END    = GtEq,
     
     __KEYWORD_BEGIN  = _signed,
-    __KEYWORD_END    = ___unaligned,
+    __KEYWORD_END    = __Noreturn,
 }
 
 @static TOKEN_STRINGS := [?]string{
@@ -296,4 +297,5 @@ Token_Kind :: enum
     "__vectorcall",
     "__declspec",
     "__unaligned",
+    "_Noreturn",
 };

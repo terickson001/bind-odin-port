@@ -28,11 +28,11 @@ _get_symbols :: proc(filepath: string) -> (lib: Lib)
     }
     
     bits: u8;
+    endianness: u8;
     os.read_ptr(file, &bits, 1);
     os.seek(file, 0, SEEK_SET);
     if bits == 1 do get_elf_symbols_32(file, &lib);
-    else do         get_elf_symbols_64(file, &lib);
-    
+    else if bits == 2 do get_elf_symbols_64(file, &lib);
     return lib;
 }
 
@@ -68,8 +68,15 @@ get_elf_symbols_64 :: proc(file: os.Handle, lib: ^Lib)
         {
             #partial switch ELF_Symbol_Type(sym.info & 0xf)
             {
-                case .Object, .Function: 
-                from := cstring(&section_names[sections[sym.section_index].name]);
+                case .Object, .Function:
+                from: cstring;
+                switch sym.section_index
+                {
+                    case 0x0: from = "";
+                    case 0xFFF1: from = "ABS";
+                    case 0xFFF2: from = "COMMON";
+                    case: from = cstring(&section_names[sections[sym.section_index].name]);
+                }
                 if from == "" do continue;
                 name := strings.clone(string(cstring(&string_table[sym.name])));
                 lib.symbols[name] = true;

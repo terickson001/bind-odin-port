@@ -695,10 +695,10 @@ parse_integer_or_float_type :: proc(using p: ^Parser) -> ^Node
         advance(p);
     }
     
-    if (longs > 0 && (short || size > 0)) || short && size > 0
-        || (char && (longs > 0 || short || size > 0 || float))
-        || (float && (short || size > 0 || signed || unsigned))
-        || (signed && unsigned)
+    if (longs > 0 && (short || size > 0)) || short && size > 0 \
+        || (char && (longs > 0 || short || size > 0 || float)) \
+        || (float && (short || size > 0 || signed || unsigned)) \
+        || (signed && unsigned) \
         || longs > 2
     {
         lex.error(start, "Invalid combination of type specifiers");

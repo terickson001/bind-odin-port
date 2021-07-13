@@ -252,7 +252,7 @@ lex_number :: proc(using lexer: ^Lexer) -> (token: Token)
     return token;
 }
 
-lex_string :: proc(using lexer: ^Lexer) -> (token: Token)
+lex_string_tok :: proc(using lexer: ^Lexer) -> (token: Token)
 {
     token.location = location;
     token.column = idx - line_start + 1;
@@ -468,7 +468,7 @@ lex_token :: proc(using lexer: ^Lexer) -> (token: Token, ok: bool)
         else if len(data) > idx+1 && data[idx+1] == '"'
         {
             idx += 1;
-            token = lex_string(lexer);
+            token = lex_string_tok(lexer);
             break;
         }
         fallthrough;
@@ -501,7 +501,7 @@ lex_token :: proc(using lexer: ^Lexer) -> (token: Token, ok: bool)
         case '0'..'9': token = lex_number(lexer);
         
         case '#': token = multi_tok(lexer, .Hash, .Paste);
-        case '"': token = lex_string(lexer);
+        case '"': token = lex_string_tok(lexer);
         case '\'': token = lex_char(lexer);
         case '\\': token.kind = .BackSlash; idx += 1;
         case '.': {
@@ -611,6 +611,27 @@ lex_file :: proc(filename: string, allocator := context.allocator) -> (^Token, b
 {
     lexer, file_ok := make_lexer(filename);
     if !file_ok do return nil, false;
+    
+    return run_lexer(&lexer, allocator);
+}
+
+STRING_LEX_FILENAME := "<USER>";
+make_lexer_string :: proc(str: string, allocator := context.allocator) -> (lexer: Lexer, ok: bool)
+{
+    using lexer;
+    filename = STRING_LEX_FILENAME;
+    data = transmute([]byte)strings.clone(str);
+    
+    column = 0;
+    line   = 1;
+    bol    = true;
+    return lexer, true;
+}
+
+lex_string :: proc(str: string, allocator := context.allocator) -> (^Token, bool)
+{
+    lexer, ok := make_lexer_string(str);
+    if !ok do return nil, false;
     
     return run_lexer(&lexer, allocator);
 }

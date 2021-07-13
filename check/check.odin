@@ -26,7 +26,7 @@ Checker :: struct
     sym_id: u64,
 }
 
-type_aliases := map[string]^type.Type
+type_aliases := map[string]^type.Type \
 {
     "int8_t"  = &type.type_i8,
     "int16_t" = &type.type_i16,
@@ -890,7 +890,7 @@ check_expr :: proc(using c: ^Checker, expr: ^Node) -> Operand
         check_type(c, v.type_expr);
         assert(v.type_expr.type != nil);
         op = check_expr(c, v.expr);
-        fmt.println(ast.node_location(v.expr));
+        // fmt.println(ast.node_location(v.expr));
         assert(v.expr.type != nil);
         cast_operand(&op, v.type_expr.type);
         expr.type = op.type;

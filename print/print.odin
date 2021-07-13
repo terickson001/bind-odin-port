@@ -36,10 +36,10 @@ Printer :: struct
     var_name_padding: int,
 }
 
-@static type_cstring: ^Type;
-@static type_rawptr: ^Type;
+type_cstring: ^Type;
+type_rawptr: ^Type;
 
-@static reserved_words := map[string]string{
+reserved_words := map[string]string{
     // Reserverd Words
     "align_of" = "align_of_",
     "defer" = "defer_",
@@ -68,7 +68,7 @@ Printer :: struct
     "using" = "using_",
 };
 
-@static specific_renames := map[string]string{
+specific_renames := map[string]string{
     "int8_t"  = "i8",
     "int16_t" = "i16",
     "int32_t" = "i32",
@@ -85,7 +85,7 @@ Printer :: struct
     
     "uintptr_t" = "uintptr",
     "intptr_t"  = "int",
-    "wchar_t" = "_c.wchar_t"
+    "wchar_t" = "_c.wchar_t",
 };
 
 

@@ -22,7 +22,7 @@ Config :: struct
     
     // Preprocess
     include_dirs: []string,
-    // macros: map[string]string,
+    macros: map[string]string,
     
     // Bind
     package_name: string,
@@ -50,4 +50,4 @@ Config :: struct
     libs: []lib.Lib,
 }
 
-@static global_config: Config;
+global_config: Config;

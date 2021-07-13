@@ -32,7 +32,7 @@ Value :: struct
         u64,
         f64,
         string,
-    }
+    },
 }
 
 clone_token :: proc(token: ^Token, allocator := context.allocator) -> ^Token
@@ -179,7 +179,7 @@ Token_Kind :: enum
     __KEYWORD_END    = __Noreturn,
 }
 
-@static TOKEN_STRINGS := [?]string{
+TOKEN_STRINGS := [?]string{
     "Invalid",
     "EOF",
     "Comment",

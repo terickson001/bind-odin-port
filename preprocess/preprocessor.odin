@@ -63,6 +63,24 @@ make_preprocessor :: proc() -> ^Preprocessor
     copy(pp.include_dirs, config.global_config.include_dirs);
     copy(pp.include_dirs[len(config.global_config.include_dirs):], lib.sys_info.include);
     
+    for k, v in config.global_config.macros
+    {
+        name, name_ok := lex.lex_string(k);
+        body, body_ok := lex.lex_string(v);
+        if !name_ok || !body_ok
+        {
+            fmt.eprintf("Invalid user-defined macro %q\n", k);
+            continue;
+        }
+        macro := Macro \
+        {
+            name = name,
+            body = body,
+            params = nil,
+        };
+        pp.macros[strings.clone(k)] = macro;
+    }
+    
     token_pool := mem.Dynamic_Pool{};
     mem.dynamic_pool_init(&token_pool);
     pp.list_allocator = mem.dynamic_pool_allocator(&token_pool);
@@ -324,7 +342,7 @@ insert_macro_args :: proc(using pp: ^Preprocessor, body: ^Token, args: ^Macro_Ar
             
             if app_curr == &appendix
             {
-                if paste_next && arg != nil && arg.param.va_args
+                if paste_next && arg != nil && arg.param.va_args \
                     && before_comma != nil && before_comma.next.next == nil
                 {
                     before_comma.next = nil;
@@ -448,7 +466,7 @@ parse_line_with_continuations :: proc(using pp: ^Preprocessor) -> ^Token
     return line.next;
 }
 
-@static VA_ARG_STR := "__VA_ARGS__";
+VA_ARG_STR := "__VA_ARGS__";
 parse_macro_params :: proc(using pp: ^Preprocessor) -> ^Macro_Param
 {
     params: Macro_Param;

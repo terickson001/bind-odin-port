@@ -91,8 +91,8 @@ advance_expr :: proc(expr: ^^Token)
     }
 }
 
-@static TRUE_STR := "1";
-@static FALSE_STR := "0";
+TRUE_STR := "1";
+FALSE_STR := "0";
 CONSTANT_ZERO := Expr_Constant{{4, 10, 1, false, false, u64(0)}};
 CONSTANT_ONE  := Expr_Constant{{4, 10, 1, false, false, u64(1)}};
 prep_expr :: proc(pp: ^Preprocessor, expr: ^^Token)

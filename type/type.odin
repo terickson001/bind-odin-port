@@ -124,51 +124,51 @@ Bitfield :: struct
 
 Va_Arg :: struct {}
 
-@static type_invalid := Type{size=0, variant=Invalid{}};
+type_invalid := Type{size=0, variant=Invalid{}};
 
-@static type_void := Type{size=0, variant=Primitive{.void, "void", {}}};
+type_void := Type{size=0, variant=Primitive{.void, "void", {}}};
 
-@static type_char      := Type{size=size_of(c.char), variant=Primitive{.char, "char", {.Integer, .Unsigned}}};
+type_char      := Type{size=size_of(c.char), variant=Primitive{.char, "char", {.Integer, .Unsigned}}};
 
-@static type_schar     := Type{size=size_of(c.schar),     variant=Primitive{.schar,     "schar",     {.Integer}}};
-@static type_short     := Type{size=size_of(c.short),     variant=Primitive{.short,     "short",     {.Integer}}};
-@static type_int       := Type{size=size_of(c.int),       variant=Primitive{.int,       "int",       {.Integer}}};
-@static type_long      := Type{size=size_of(c.long),      variant=Primitive{.long,      "long",      {.Integer}}};
-@static type_longlong  := Type{size=size_of(c.longlong),  variant=Primitive{.longlong,  "longlong",  {.Integer}}};
+type_schar     := Type{size=size_of(c.schar),     variant=Primitive{.schar,     "schar",     {.Integer}}};
+type_short     := Type{size=size_of(c.short),     variant=Primitive{.short,     "short",     {.Integer}}};
+type_int       := Type{size=size_of(c.int),       variant=Primitive{.int,       "int",       {.Integer}}};
+type_long      := Type{size=size_of(c.long),      variant=Primitive{.long,      "long",      {.Integer}}};
+type_longlong  := Type{size=size_of(c.longlong),  variant=Primitive{.longlong,  "longlong",  {.Integer}}};
 
-@static type_uchar     := Type{size=size_of(c.uchar),     variant=Primitive{.uchar,     "uchar",     {.Integer, .Unsigned}}};
-@static type_ushort    := Type{size=size_of(c.ushort),    variant=Primitive{.ushort,    "ushort",    {.Integer, .Unsigned}}};
-@static type_uint      := Type{size=size_of(c.uint),      variant=Primitive{.uint,      "uint",      {.Integer, .Unsigned}}};
-@static type_ulong     := Type{size=size_of(c.ulong),     variant=Primitive{.ulong,     "ulong",     {.Integer, .Unsigned}}};
-@static type_ulonglong := Type{size=size_of(c.ulonglong), variant=Primitive{.ulonglong, "ulonglong", {.Integer, .Unsigned}}};
+type_uchar     := Type{size=size_of(c.uchar),     variant=Primitive{.uchar,     "uchar",     {.Integer, .Unsigned}}};
+type_ushort    := Type{size=size_of(c.ushort),    variant=Primitive{.ushort,    "ushort",    {.Integer, .Unsigned}}};
+type_uint      := Type{size=size_of(c.uint),      variant=Primitive{.uint,      "uint",      {.Integer, .Unsigned}}};
+type_ulong     := Type{size=size_of(c.ulong),     variant=Primitive{.ulong,     "ulong",     {.Integer, .Unsigned}}};
+type_ulonglong := Type{size=size_of(c.ulonglong), variant=Primitive{.ulonglong, "ulonglong", {.Integer, .Unsigned}}};
 
-@static type_float      := Type{size=size_of(c.float),  variant=Primitive{.float,      "float",      {.Float}}};
-@static type_double     := Type{size=size_of(c.double), variant=Primitive{.double,     "double",     {.Float}}};
-@static type_longdouble := Type{size=size_of(c.double), variant=Primitive{.longdouble, "longdouble", {.Float}}};
+type_float      := Type{size=size_of(c.float),  variant=Primitive{.float,      "float",      {.Float}}};
+type_double     := Type{size=size_of(c.double), variant=Primitive{.double,     "double",     {.Float}}};
+type_longdouble := Type{size=size_of(c.double), variant=Primitive{.longdouble, "longdouble", {.Float}}};
 
-@static type_u8  := Type{size=size_of(u8),  variant=Primitive{.u8,  "u8",  {.Integer, .Unsigned}}};
-@static type_u16 := Type{size=size_of(u16), variant=Primitive{.u16, "u16", {.Integer, .Unsigned}}};
-@static type_u32 := Type{size=size_of(u32), variant=Primitive{.u32, "u32", {.Integer, .Unsigned}}};
-@static type_u64 := Type{size=size_of(u64), variant=Primitive{.u64, "u64", {.Integer, .Unsigned}}};
+type_u8  := Type{size=size_of(u8),  variant=Primitive{.u8,  "u8",  {.Integer, .Unsigned}}};
+type_u16 := Type{size=size_of(u16), variant=Primitive{.u16, "u16", {.Integer, .Unsigned}}};
+type_u32 := Type{size=size_of(u32), variant=Primitive{.u32, "u32", {.Integer, .Unsigned}}};
+type_u64 := Type{size=size_of(u64), variant=Primitive{.u64, "u64", {.Integer, .Unsigned}}};
 
-@static type_i8  := Type{size=size_of(i8),  variant=Primitive{.i8,  "i8",  {.Integer}}};
-@static type_i16 := Type{size=size_of(i16), variant=Primitive{.i16, "i16", {.Integer}}};
-@static type_i32 := Type{size=size_of(i32), variant=Primitive{.i32, "i32", {.Integer}}};
-@static type_i64 := Type{size=size_of(i64), variant=Primitive{.i64, "i64", {.Integer}}};
+type_i8  := Type{size=size_of(i8),  variant=Primitive{.i8,  "i8",  {.Integer}}};
+type_i16 := Type{size=size_of(i16), variant=Primitive{.i16, "i16", {.Integer}}};
+type_i32 := Type{size=size_of(i32), variant=Primitive{.i32, "i32", {.Integer}}};
+type_i64 := Type{size=size_of(i64), variant=Primitive{.i64, "i64", {.Integer}}};
 
-@static type_va_arg := Type{size=0, variant=Va_Arg{}};
+type_va_arg := Type{size=0, variant=Va_Arg{}};
 
 
-@static type_size_t    := Type{size=size_of(c.size_t), variant=Primitive{.size_t, "size_t", {.Integer, .Unsigned}}};
-@static type_ssize_t   := Type{size=size_of(c.ssize_t), variant=Primitive{.ssize_t, "ssize_t", {.Integer}}};
-@static type_ptrdiff_t := Type{size=size_of(c.ptrdiff_t), variant=Primitive{.ptrdiff_t, "ptrdiff_t", {.Integer}}};
-@static type_uintptr_t := Type{size=size_of(c.uintptr_t), variant=Primitive{.uintptr_t, "uintptr_t", {.Integer, .Unsigned}}};
-@static type_intptr_t  := Type{size=size_of(c.intptr_t), variant=Primitive{.intptr_t, "intptr_t", {.Integer}}};
-@static type_wchar_t   := Type{size=size_of(c.wchar_t), variant=Primitive{.wchar_t, "wchar_t", {.Integer, .Unsigned}}};
+type_size_t    := Type{size=size_of(c.size_t), variant=Primitive{.size_t, "size_t", {.Integer, .Unsigned}}};
+type_ssize_t   := Type{size=size_of(c.ssize_t), variant=Primitive{.ssize_t, "ssize_t", {.Integer}}};
+type_ptrdiff_t := Type{size=size_of(c.ptrdiff_t), variant=Primitive{.ptrdiff_t, "ptrdiff_t", {.Integer}}};
+type_uintptr_t := Type{size=size_of(c.uintptr_t), variant=Primitive{.uintptr_t, "uintptr_t", {.Integer, .Unsigned}}};
+type_intptr_t  := Type{size=size_of(c.intptr_t), variant=Primitive{.intptr_t, "intptr_t", {.Integer}}};
+type_wchar_t   := Type{size=size_of(c.wchar_t), variant=Primitive{.wchar_t, "wchar_t", {.Integer, .Unsigned}}};
 
-@static type_cstring: ^Type;
+type_cstring: ^Type;
 
-@static primitive_types := [?]^Type
+primitive_types := [?]^Type \
 {
     &type_void,
     
@@ -296,7 +296,7 @@ make_type :: proc(variant: $T) -> ^Type
     return type;
 }
 
-@static cached_ptr_types: map[u64]^Type;
+cached_ptr_types: map[u64]^Type;
 pointer_type :: proc(base: ^Type) -> ^Type
 {
     type := get_cached_type(cached_ptr_types, base);
@@ -309,7 +309,7 @@ pointer_type :: proc(base: ^Type) -> ^Type
     return type;
 }
 
-@static cached_func_types: map[u64]^Type;
+cached_func_types: map[u64]^Type;
 func_type :: proc(ret: ^Type, params: []^Type) -> ^Type
 {
     type := get_cached_type(cached_func_types, params, ret);
@@ -322,7 +322,7 @@ func_type :: proc(ret: ^Type, params: []^Type) -> ^Type
     return type;
 }
 
-@static cached_array_types: map[u64]^Type;
+cached_array_types: map[u64]^Type;
 array_type :: proc(base_type: ^Type, size: i64) -> ^Type
 {
     type := get_cached_type(cached_array_types, base_type, size);
@@ -335,7 +335,7 @@ array_type :: proc(base_type: ^Type, size: i64) -> ^Type
     return type;
 }
 
-@static cached_bitfield_types: map[u64]^Type;
+cached_bitfield_types: map[u64]^Type;
 bitfield_type :: proc(base_type: ^Type, size: i64) -> ^Type
 {
     type := get_cached_type(cached_bitfield_types, base_type, size);

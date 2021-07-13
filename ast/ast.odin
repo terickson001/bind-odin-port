@@ -10,7 +10,7 @@ Token :: lex.Token;
 @private
 Type :: type.Type;
 
-@static global_uid := u64(0);
+global_uid := u64(0);
 
 make :: proc(variant: $T) -> ^T
 {
@@ -326,7 +326,7 @@ Function_Decl :: struct
 Va_Args :: struct
 {
     using node: Node,
-    token: ^Token
+    token: ^Token,
 }
 
 Numeric_Type :: struct
@@ -355,7 +355,7 @@ Const_Type :: struct
 {
     using node: Node,
     token: ^Token,
-    type_expr: ^Node
+    type_expr: ^Node,
 }
 
 Struct_Type :: struct

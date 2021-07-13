@@ -43,53 +43,55 @@ main :: proc()
     else
     {
         
-        /*
-                config := bind.Config{
-                    // General
-                    root = "/usr/include/X11",
-                    files = []string{"Xlib.h", "Xutil.h", "Xos.h", "Xatom.h"},
-                    output = "out",
-                    
-                    // Preprocess
-                    include_dirs = []string{},
-                    
-                    // Bind
-                    package_name = "xlib",
-                    libraries = []string{"libX11.so"},
-                    use_cstring = true,
-                    separate_output = true,
-                    
-                    var_prefix   = "X",
-                    type_prefix  = "X",
-                    proc_prefix  = "X",
-                    const_prefix = "X",
-                    
-                    proc_case = .Snake,
-                    var_case = .Snake,
-                };
-        */
-        
         
         config := bind.Config{
             // General
-            root = "/usr/include/openssl",
-            files = []string{"ssl.h", "err.h"},
-            output = "openssl",
+            root = "/usr/include/X11",
+            files = []string{"Xlib.h", "Xutil.h", "Xos.h", "Xatom.h"},
+            output = "out",
             
             // Preprocess
             include_dirs = []string{},
             
             // Bind
-            package_name = "ssl",
-            libraries = []string{"libssl.so"},
+            package_name = "xlib",
+            libraries = []string{"libX11.so"},
             use_cstring = true,
             separate_output = true,
             
-            var_prefix   = "SSL_",
-            type_prefix  = "SSL_",
-            proc_prefix  = "SSL_",
-            const_prefix = "SSL_",
+            var_prefix   = "X",
+            type_prefix  = "X",
+            proc_prefix  = "X",
+            const_prefix = "X",
+            
+            proc_case = .Snake,
+            var_case = .Snake,
         };
+        
+        
+        
+        /*
+                config := bind.Config{
+                    // General
+                    root = "/usr/include/openssl",
+                    files = []string{"ssl.h", "err.h"},
+                    output = "openssl",
+                    
+                    // Preprocess
+                    include_dirs = []string{},
+                    
+                    // Bind
+                    package_name = "ssl",
+                    libraries = []string{"libssl.so"},
+                    use_cstring = true,
+                    separate_output = true,
+                    
+                    var_prefix   = "SSL_",
+                    type_prefix  = "SSL_",
+                    proc_prefix  = "SSL_",
+                    const_prefix = "SSL_",
+                };
+        */
         
         
         /*

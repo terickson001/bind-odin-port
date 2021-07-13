@@ -13,7 +13,7 @@ System_Info :: struct
     compiler: string,
 }
 
-@static sys_info: System_Info;
+sys_info: System_Info;
 
 Lib :: struct
 {

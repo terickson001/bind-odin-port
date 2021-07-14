@@ -768,9 +768,8 @@ print_basic_lit :: proc(using p: ^Printer, node: ^Node, indent: int)
     }
 }
 
-print_expr :: proc(using p: ^Printer, node: ^Node, indent: int, loc := #caller_location)
+print_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
 {
-    if node == nil do fmt.println(loc);
     assert (node != nil);
     switch v in node.derived
     {

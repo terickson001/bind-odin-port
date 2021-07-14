@@ -1,6 +1,6 @@
 package main
 
-import ".."
+import bind ".."
 import "../print"
 
 main :: proc()
@@ -44,30 +44,56 @@ main :: proc()
     {
         
         
+        /*
+                config := bind.Config{
+                    // General
+                    root = "/usr/include/X11",
+                    files = []string{"Xlib.h", "Xutil.h", "Xos.h", "Xatom.h"},
+                    output = "out",
+                    
+                    // Preprocess
+                    include_dirs = []string{},
+                    
+                    // Bind
+                    package_name = "xlib",
+                    libraries = []string{"libX11.so"},
+                    use_cstring = true,
+                    separate_output = true,
+                    
+                    var_prefix   = "X",
+                    type_prefix  = "X",
+                    proc_prefix  = "X",
+                    const_prefix = "X",
+                    
+                    proc_case = .Snake,
+                    var_case = .Snake,
+                };
+        */
+        
         config := bind.Config{
+            root = "./test",
+            
             // General
-            root = "/usr/include/X11",
-            files = []string{"Xlib.h", "Xutil.h", "Xos.h", "Xatom.h"},
+            files = []string{"miniaudio.h"},
             output = "out",
             
             // Preprocess
             include_dirs = []string{},
             
             // Bind
-            package_name = "xlib",
-            libraries = []string{"libX11.so"},
+            package_name = "miniaudio",
+            libraries = []string{"./test/miniaudio.so"},
             use_cstring = true,
-            separate_output = true,
+            separate_output = false,
             
-            var_prefix   = "X",
-            type_prefix  = "X",
-            proc_prefix  = "X",
-            const_prefix = "X",
+            var_prefix   = "ma_",
+            type_prefix  = "ma_",
+            proc_prefix  = "ma_",
+            const_prefix = "ma_",
             
-            proc_case = .Snake,
-            var_case = .Snake,
+            //proc_case = .Snake,
+            //var_case = .Snake,
         };
-        
         
         
         /*

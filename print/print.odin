@@ -768,8 +768,10 @@ print_basic_lit :: proc(using p: ^Printer, node: ^Node, indent: int)
     }
 }
 
-print_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
+print_expr :: proc(using p: ^Printer, node: ^Node, indent: int, loc := #caller_location)
 {
+    if node == nil do fmt.println(loc);
+    assert (node != nil);
     switch v in node.derived
     {
         case ast.Ternary_Expr:  print_ternary_expr (p, node, indent);

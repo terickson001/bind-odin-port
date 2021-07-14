@@ -312,7 +312,7 @@ DLL_Flag :: enum
     App_Container = 0x1000,
     WDM_Driver = 0x2000,
     Guard_CF = 0x4000,
-    Terminal_Server_Aware = 0x8000
+    Terminal_Server_Aware = 0x8000,
 }
 
 Image_Data_Directory :: struct
@@ -384,7 +384,7 @@ Section_Type :: enum
 {
     Text = 0x20,
     Data = 0x40,
-    BSS  = 0x80
+    BSS  = 0x80,
 }
 
 Coff_Relocation :: struct
@@ -448,7 +448,7 @@ Storage_Class :: enum
     File,
     Section,
     Weak_External,
-    CLR_Token = 107
+    CLR_Token = 107,
 }
 
 Symbol_Type :: enum
@@ -472,7 +472,7 @@ Symbol_Type :: enum
     
     Pointer = 0x10,
     Function = 0x20,
-    Array = 0x30
+    Array = 0x30,
 }
 
 Coff_Aux_Function :: struct

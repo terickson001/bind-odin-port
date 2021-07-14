@@ -486,6 +486,7 @@ Operand :: struct
 
 check_const_expr :: proc(using c: ^Checker, const_expr: ^Node) -> Operand
 {
+    assert(const_expr != nil);
     op := check_expr(c, const_expr);
     if !op.const
     {
@@ -849,6 +850,7 @@ cast_operand :: proc(op: ^Operand, typ: ^Type)
     }
 }
 
+import "core:mem"
 check_expr :: proc(using c: ^Checker, expr: ^Node) -> Operand
 {
     op := Operand{};
@@ -960,9 +962,18 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node)
         case ast.Array_Type:
         check_type(c, v.type_expr);
         assert(v.type_expr.type != nil);
-        size := check_const_expr(c, v.count);
-        // fmt.printf("ARRAY SIZE: %#v\n", size); 
-        type_expr.type = type.array_type(v.type_expr.type, size.val.(i64));
+        if v.count != nil
+        {
+            size := check_const_expr(c, v.count);
+            // fmt.printf("ARRAY SIZE: %#v\n", size); 
+            type_expr.type = type.array_type(v.type_expr.type, size.val.(i64));
+        }
+        else
+        {
+            ptr := ast.make(ast.Pointer_Type{type_expr^, ast.node_token(v.type_expr), v.type_expr});
+            type_expr.derived = ptr^;
+            type_expr.type = type.pointer_type(v.type_expr.type);
+        }
         
         case ast.Bitfield_Type:
         check_type(c, v.type_expr);

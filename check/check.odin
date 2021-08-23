@@ -104,6 +104,7 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node)
             else
             {
                 decl.symbol = symbols[name];
+                decl.symbol.decl = decl;
             }
             
             case ast.Typedef:
@@ -122,20 +123,35 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node)
                 else
                 {
                     var.symbol = symbols[name];
+                    var.symbol.decl = var;
                 }
                 
                 
                 name = "";
+                base_name := "";
                 base := ast.get_base_type(var.derived.(ast.Var_Decl).type_expr);
                 switch r in base.derived
                 {
                     case ast.Struct_Type: 
-                    if r.name != nil do name = fmt.aprintf("struct %s", ast.ident(r.name));
+                    if r.name != nil 
+                    {
+                        base_name = ast.ident(r.name);
+                        name = fmt.aprintf("struct %s", base_name);
+                    }
                     case ast.Union_Type: 
-                    if r.name != nil do name = fmt.aprintf("union %s", ast.ident(r.name));
+                    if r.name != nil 
+                    {
+                        base_name = ast.ident(r.name);
+                        name = fmt.aprintf("union %s", base_name);
+                    }
                     case ast.Enum_Type:  
-                    if r.name != nil do name = fmt.aprintf("enum %s", ast.ident(r.name));
+                    if r.name != nil 
+                    {
+                        base_name = ast.ident(r.name);
+                        name = fmt.aprintf("enum %s", base_name);
+                    }
                 }
+                
                 if name == "" do continue;
                 if name not_in symbols
                 {
@@ -143,7 +159,6 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node)
                     symbol.uid = sym_id;
                     sym_id += 1;
                     symbol.kind = .Type;
-                    // fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
                     symbols[name] = symbol;
                 }
                 else
@@ -219,6 +234,7 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node)
             else
             {
                 decl.symbol = symbols[name];
+                decl.symbol.decl = decl;
             }
             
             case ast.Union_Type:
@@ -237,6 +253,7 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node)
             else
             {
                 decl.symbol = symbols[name];
+                decl.symbol.decl = decl;
             }
             
             case ast.Enum_Type:
@@ -255,6 +272,7 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node)
             else
             {
                 decl.symbol = symbols[name];
+                decl.symbol.decl = decl;
             }
         }
     }
@@ -339,12 +357,32 @@ check_declaration :: proc(using c: ^Checker, decl: ^Node)
             {
                 decl.symbol.type = decl.type;
             }
+            else if v.kind == .Typedef
+            {
+                base := ast.get_base_type(v.type_expr);
+                switch r in base.derived
+                {
+                    case ast.Struct_Type:
+                    if r.name == nil do break;
+                    nam := ast.ident(r.name);
+                    if nam == name do base^ = base.symbol.decl^;
+                    
+                    case ast.Union_Type:
+                    if r.name == nil do break;
+                    nam := ast.ident(r.name);
+                    if nam == name do base^ = base.symbol.decl^;
+                    
+                    case ast.Enum_Type:
+                    if r.name == nil do break;
+                    nam := ast.ident(r.name);
+                    if nam == name do base^ = base.symbol.decl^;
+                }
+            }
         }
         
         case ast.Typedef:
         for var := v.var_list; var != nil; var = var.next
         {
-            // fmt.println("TYPEDEF:", ast.var_ident(var));
             check_type(c, var.derived.(ast.Var_Decl).type_expr);
             assert(var.derived.(ast.Var_Decl).type_expr.type != nil);
             var.type = type.named_type(ast.var_ident(var), var.derived.(ast.Var_Decl).type_expr.type);
@@ -951,7 +989,8 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node)
         
         case ast.Ident:
         symbol := check_name(c, type_expr);
-        assert(symbol != nil && symbol.type != nil);
+        assert(symbol != nil);
+        assert(symbol.type != nil);
         type_expr.type = symbol.type;
         
         case ast.Pointer_Type:

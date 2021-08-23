@@ -70,31 +70,57 @@ main :: proc()
                 };
         */
         
+        /*
+                config := bind.Config{
+                    root = "./test",
+                    
+                    // General
+                    files = []string{"test.h"},
+                    output = "out",
+                    
+                    // Preprocess
+                    include_dirs = []string{},
+                    
+                    // Bind
+                    package_name = "miniaudio",
+                    libraries = []string{"./test/miniaudio.so"},
+                    use_cstring = true,
+                    separate_output = false,
+                    
+                    var_prefix   = "ma_",
+                    type_prefix  = "ma_",
+                    proc_prefix  = "ma_",
+                    const_prefix = "ma_",
+                    
+                    //proc_case = .Snake,
+                    //var_case = .Snake,
+                };
+                */
+        
         config := bind.Config{
-            root = "./test",
+            root = "/usr/include/curl",
             
             // General
-            files = []string{"miniaudio.h"},
+            files = []string{"curl.h"},
             output = "out",
             
             // Preprocess
             include_dirs = []string{},
             
             // Bind
-            package_name = "miniaudio",
-            libraries = []string{"./test/miniaudio.so"},
+            package_name = "curl",
+            libraries = []string{"/usr/lib/libcurl.so"},
             use_cstring = true,
             separate_output = false,
             
-            var_prefix   = "ma_",
-            type_prefix  = "ma_",
-            proc_prefix  = "ma_",
-            const_prefix = "ma_",
+            var_prefix   = "curl_",
+            type_prefix  = "curl_",
+            proc_prefix  = "curl_",
+            const_prefix = "CURL",
             
             //proc_case = .Snake,
             //var_case = .Snake,
         };
-        
         
         /*
                 config := bind.Config{

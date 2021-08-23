@@ -45,7 +45,7 @@ advance :: proc(using p: ^Parser) -> ^Token
 
 allow :: proc(using p: ^Parser, k: lex.Token_Kind) -> ^Token
 {
-    if tokens.kind == k
+    if tokens != nil && tokens.kind == k
     {
         return advance(p);
     }
@@ -124,7 +124,7 @@ parse_typedef :: proc(using p: ^Parser) -> ^Node
         return nil;
     }
     
-    for tokens.kind == .___attribute__ do parse_attributes(p);
+    for tokens != nil && tokens.kind == .___attribute__ do parse_attributes(p);
     
     return ast.make(ast.Typedef{{}, token, vars});
 }
@@ -206,8 +206,12 @@ parse_operand :: proc(using p: ^Parser) -> ^Node
         return parse_ident(p);
         
         case .Integer, .Float, .Char,
-        .Wchar, .String:
+        .Wchar:
         return ast.make(ast.Basic_Lit{{}, advance(p)});
+        
+        case .String:
+        str := parse_string(p);
+        return ast.make(ast.Basic_Lit{{}, str.derived.(ast.String).token});
         
         case .OpenBrace:
         return parse_compound_literal(p);
@@ -770,7 +774,7 @@ parse_parameter :: proc(using p: ^Parser) -> ^Node
     name: ^Node;
     type := parse_type(p, &name);
     
-    for tokens.kind == .___attribute__ do parse_attributes(p);
+    for tokens != nil && tokens.kind == .___attribute__ do parse_attributes(p);
     
     var_kind: ast.Var_Decl_Kind = name != nil ? .Parameter : .AnonParameter;
     return ast.make(ast.Var_Decl{{}, type, name, var_kind});
@@ -885,7 +889,7 @@ parse_type_spec :: proc(using p: ^Parser, var_name: ^^Node, cc: ^^Token) -> ^Nod
         return parse_type_spec(p, var_name, cc);
         
         case .___attribute__:
-        for tokens.kind == .___attribute__ do parse_attributes(p);
+        for tokens != nil && tokens.kind == .___attribute__ do parse_attributes(p);
         
         case .___asm__:
         advance(p);
@@ -977,7 +981,7 @@ parse_decl :: proc(using p: ^Parser, var_kind: ast.Var_Decl_Kind) -> ^Node
             parse_decl_spec(p);
             
             case .___attribute__:
-            for tokens.kind == .___attribute__ do parse_attributes(p);
+            for tokens != nil && tokens.kind == .___attribute__ do parse_attributes(p);
             
             case .___asm__:
             advance(p);
@@ -1040,7 +1044,7 @@ parse_decl :: proc(using p: ^Parser, var_kind: ast.Var_Decl_Kind) -> ^Node
             parse_decl_spec(p);
             
             case .___attribute__:
-            for tokens.kind == .___attribute__ do parse_attributes(p);
+            for tokens != nil && tokens.kind == .___attribute__ do parse_attributes(p);
             
             case .___asm__:
             expect(p, .___asm__);

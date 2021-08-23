@@ -364,12 +364,14 @@ print_symbols :: proc(using p: ^Printer, filepath: string, syms: []^Symbol)
     {
         if sym.kind == .Type 
         {
+            
             switch v in sym.decl.derived
             {
                 case ast.Struct_Type: if ast.ident(v.name) in symbols do continue;
                 case ast.Union_Type:  if ast.ident(v.name) in symbols do continue;
                 case ast.Enum_Type:   if ast.ident(v.name) in symbols do continue;
             }
+            
             print_node(p, sym.decl, 0, true, false);
         }
     }
@@ -677,12 +679,14 @@ print_type :: proc(using p: ^Printer, node: ^Node, indent: int)
         case ast.Const_Type:    print_type(p, v.type_expr, 0);
         case ast.Bitfield_Type: print_expr(p, v.size, 0);
         case ast.Struct_Type:   print_node(p, node, indent, false, false);
+        //case ast.Struct_Type:   print_node(p, node.symbol.decl, indent, false, false);
         case ast.Union_Type:    print_node(p, node, indent, false, false);
         case ast.Enum_Type:     print_node(p, node, indent, false, false);
         case ast.Ident:         print_ident(p, node, indent, 0, .Type, true);
         case ast.Numeric_Type:  
         print_indent(p, indent);
-        pprintf(p, "_c.%s", v.name);
+        if len(v.name) > 3 do pprintf(p, "_c.%s", v.name);
+        else do               pprintf(p, "%s",    v.name);
         
         case ast.Pointer_Type:
         if node.type == type_rawptr
@@ -822,7 +826,11 @@ print_binary_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
 print_unary_expr :: proc(using p: ^Printer, node: ^Node, indent: int)
 {
     v := node.derived.(ast.Unary_Expr);
-    pprintf(p, "%s", v.op.text);
+    switch v.op.text
+    {
+        case "sizeof": pprintf(p, "size_of");
+        case:          pprintf(p, "%s", v.op.text);
+    }
     print_expr(p, v.operand, 0);
 }
 
@@ -1135,11 +1143,10 @@ print_variable :: proc(using p: ^Printer, node: ^Node, indent: int, top_level: b
     print_indent(p, indent);
     
     v := node.derived.(ast.Var_Decl);
-    typedef := false;
     #partial switch v.kind
     {
         case .Typedef:
-        typedef = true;
+        if v.type_expr.type == &type.type_void do return;
         name := ast.var_ident(node);
         print_string(p, name, 0, 0, .Type, true);
         pprintf(p, " :: ");

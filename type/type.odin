@@ -237,7 +237,7 @@ is_float :: proc(type: ^Type) -> bool
 hash_mix :: proc(a, b: u64) -> u64
 {
     data := transmute([16]u8)[2]u64{a, b};
-    return hash.crc64(data[:]);
+    return hash.crc64_ecma_182(data[:]);
 }
 
 @private
@@ -253,11 +253,11 @@ hash_multi :: proc(args: []any) -> u64
             case rt.Type_Info_Slice: 
             slice := cast(^rt.Raw_Slice)a.data;
             bytes := mem.slice_ptr(cast(^byte)slice.data, slice.len * v.elem_size);
-            new_hash = hash.crc64(bytes);
+            new_hash = hash.crc64_ecma_182(bytes);
             
             case:
             bytes := mem.slice_ptr(cast(^byte)a.data, ti.size);
-            new_hash = hash.crc64(bytes);
+            new_hash = hash.crc64_ecma_182(bytes);
         }
         
         if i != 0 

@@ -113,23 +113,23 @@ change_case :: proc(str: string, casing: config.Case, preserve_trailing_undersco
         
         switch str[idx]
         {
-            case 'A'..'Z':
+            case 'A'..='Z':
             caps += 1;
             switch prev
             {
                 case '_': start = idx;
-                case 'a'..'z':
+                case 'a'..='z':
                 append(&words, str[start:idx]);
                 caps = 1;
                 start = idx;
                 
                 case: continue;
             }
-            case 'a'..'z':
+            case 'a'..='z':
             switch prev
             {
                 case '_': start = idx;
-                case 'A'..'Z':
+                case 'A'..='Z':
                 if caps > 1
                 {
                     append(&words, str[start:idx-1]);
@@ -138,14 +138,14 @@ change_case :: proc(str: string, casing: config.Case, preserve_trailing_undersco
                 }
                 continue;
                 
-                case '0'..'9':
+                case '0'..='9':
                 append(&words, str[start:idx]);
                 start = idx;
                 caps = 0;
                 
                 case: continue;
             }
-            case '0'..'9':
+            case '0'..='9':
             switch prev
             {
                 case '_': start = idx;
@@ -155,7 +155,7 @@ change_case :: proc(str: string, casing: config.Case, preserve_trailing_undersco
             case '_':
             switch prev
             {
-                case 'a'..'z', 'A'..'Z', '0'..'9':
+                case 'a'..='z', 'A'..='Z', '0'..='9':
                 append(&words, str[start:idx]);
                 caps = 0;
                 start = idx;

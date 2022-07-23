@@ -8,6 +8,8 @@ import "core:sys/windows"
 
 import "../lib"
 import "../path"
+import "../config"
+
 import "core:time"
 
 SEEK_SET :: 0;
@@ -63,6 +65,10 @@ get_predefined_macros :: proc(using pp: ^Preprocessor, info: lib.System_Info) ->
     _, ok := preprocess_fd(pp, fd);
     
     os.close(fd);
+    
+    // Manual Overrides
+    config.global_config.macros["_MSC_FULL_VER"] = "160000000";
+    config.global_config.macros["_MSC_VER"] = "1600";
     
     return true;
 }

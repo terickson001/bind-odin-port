@@ -157,10 +157,12 @@ lex_number :: proc(using lexer: ^Lexer) -> (token: Token)
     {
         if data[idx] == '.'
         {
-            if token.kind == .Float
-            {
-                lex_error(lexer, "Multiple '.' in constant");
-            }
+            /*
+                        if token.kind == .Float
+                        {
+                            lex_error(lexer, "Multiple '.' in constant");
+                        }
+            */
             token.kind = .Float;
         }
         else
@@ -295,57 +297,72 @@ lex_char :: proc(using lexer: ^Lexer) -> (token: Token)
     idx += 1; // '
     
     charconsts :: [?]u8{7, 8, 27, 12, 10, 13, 9, 11};
-    if data[idx] == '\\'
+    multi := false;
+    token.value.val = 0;
+    for _ in 0..<4
     {
-        idx += 1;
-        switch data[idx]
+        token.value.val = token.value.val.(u64) << 1;
+        if data[idx] == '\\'
         {
-            case '0'..'7':
-            num_start := idx;
-            for is_digit(data[idx], 8) do idx += 1;
-            num_str := string(data[num_start:idx]);
-            token.value.val, _ = strconv.parse_u64(num_str, 8);
-            
-            case 'x':
             idx += 1;
-            num_start := idx;
-            for is_digit(data[idx], 16) do idx += 1;
-            num_str := string(data[num_start:idx]);
-            token.value.val, _ = strconv.parse_u64(num_str, 16);
-            
-            case 'u':
-            idx += 1;
-            num_start := idx;
-            for is_digit(data[idx], 16) do idx += 1;
-            num_str := string(data[num_start:idx]);
-            if len(num_str) != 4 do error(&token, "Invalid unicode literal");
-            token.value.val, _ = strconv.parse_u64(num_str, 16);
-            
-            case 'U':
-            idx += 1;
-            num_start := idx;
-            for is_digit(data[idx], 16) do idx += 1;
-            num_str := string(data[num_start:idx]);
-            if len(num_str) != 8 do error(&token, "Invalid unicode literal");
-            token.value.val, _ = strconv.parse_u64(num_str, 16);
-            
-            case 'a': token.value.val = cast(u64)charconsts[0]; idx += 1;
-            case 'b': token.value.val = cast(u64)charconsts[1]; idx += 1;
-            case 'e': fallthrough;
-            case 'E': token.value.val = cast(u64)charconsts[2]; idx += 1;
-            case 'f': token.value.val = cast(u64)charconsts[3]; idx += 1;
-            case 'n': token.value.val = cast(u64)charconsts[4]; idx += 1;
-            case 'r': token.value.val = cast(u64)charconsts[5]; idx += 1;
-            case 't': token.value.val = cast(u64)charconsts[6]; idx += 1;
-            case 'v': token.value.val = cast(u64)charconsts[7]; idx += 1;
-            
-            case: token.value.val = cast(u64)data[idx]; idx += 1;
+            switch data[idx]
+            {
+                case '0'..'7':
+                num_start := idx;
+                for is_digit(data[idx], 8) do idx += 1;
+                num_str := string(data[num_start:idx]);
+                token.value.val, _ = strconv.parse_u64(num_str, 8);
+                
+                case 'x':
+                idx += 1;
+                num_start := idx;
+                for is_digit(data[idx], 16) do idx += 1;
+                num_str := string(data[num_start:idx]);
+                token.value.val, _ = strconv.parse_u64(num_str, 16);
+                
+                case 'u':
+                idx += 1;
+                num_start := idx;
+                for is_digit(data[idx], 16) do idx += 1;
+                num_str := string(data[num_start:idx]);
+                if len(num_str) != 4 do error(&token, "Invalid unicode literal");
+                token.value.val, _ = strconv.parse_u64(num_str, 16);
+                
+                case 'U':
+                idx += 1;
+                num_start := idx;
+                for is_digit(data[idx], 16) do idx += 1;
+                num_str := string(data[num_start:idx]);
+                if len(num_str) != 8 do error(&token, "Invalid unicode literal");
+                token.value.val, _ = strconv.parse_u64(num_str, 16);
+                
+                case 'a': token.value.val = cast(u64)charconsts[0]; idx += 1;
+                case 'b': token.value.val = cast(u64)charconsts[1]; idx += 1;
+                case 'e': fallthrough;
+                case 'E': token.value.val = cast(u64)charconsts[2]; idx += 1;
+                case 'f': token.value.val = cast(u64)charconsts[3]; idx += 1;
+                case 'n': token.value.val = cast(u64)charconsts[4]; idx += 1;
+                case 'r': token.value.val = cast(u64)charconsts[5]; idx += 1;
+                case 't': token.value.val = cast(u64)charconsts[6]; idx += 1;
+                case 'v': token.value.val = cast(u64)charconsts[7]; idx += 1;
+                
+                case: token.value.val = cast(u64)data[idx]; idx += 1;
+            }
         }
+        else
+        {
+            token.value.val = u64(data[idx]);
+            idx += 1;
+        }
+        if data[idx] == '\'' do break;
+        multi = true;
     }
-    else
+    
+    if multi
     {
-        token.value.val = u64(data[idx]);
-        idx += 1;
+        token.kind = .Integer;
+        token.value.is_char = false;
+        token.value.size = 4;
     }
     
     if data[idx] != '\'' 
@@ -534,6 +551,7 @@ lex_token :: proc(using lexer: ^Lexer) -> (token: Token, ok: bool)
         case '}': token.kind = .CloseBrace;   idx += 1;
         case '[': token.kind = .OpenBracket;  idx += 1;
         case ']': token.kind = .CloseBracket; idx += 1;
+        case '@': token.kind = .At;           idx += 1;
         
         case '=': token = multi_tok(lexer, .Eq, .CmpEq);
         case ':': token = multi_tok(lexer, .Colon);
@@ -731,7 +749,11 @@ token_list_string :: proc(tokens: ^Token, quoted := false, allocator := context.
 
 token_list_set_origin :: proc(tokens: ^Token, from: ^Token)
 {
-    if tokens != nil do tokens.first_from = true;
+    if tokens != nil 
+    {
+        tokens.first_from = true;
+        tokens.first_on_line = from.first_on_line;
+    }
     for t := tokens; t != nil; t = t.next
     {
         t.from = from;

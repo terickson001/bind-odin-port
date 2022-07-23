@@ -86,6 +86,8 @@ specific_renames := map[string]string{
     "uintptr_t" = "uintptr",
     "intptr_t"  = "int",
     "wchar_t" = "_c.wchar_t",
+    
+	"_Bool" = "_c.bool",
 };
 
 
@@ -364,12 +366,12 @@ print_symbols :: proc(using p: ^Printer, filepath: string, syms: []^Symbol)
     {
         if sym.kind == .Type 
         {
-            
+            // Check for duplicate typedef
             switch v in sym.decl.derived
             {
-                case ast.Struct_Type: if ast.ident(v.name) in symbols do continue;
-                case ast.Union_Type:  if ast.ident(v.name) in symbols do continue;
-                case ast.Enum_Type:   if ast.ident(v.name) in symbols do continue;
+                case ast.Struct_Type: if t, ok := symbols[ast.ident(v.name)]; ok && t.used do continue;
+                case ast.Union_Type:  if t, ok := symbols[ast.ident(v.name)]; ok && t.used do continue;
+                case ast.Enum_Type:   if t, ok := symbols[ast.ident(v.name)]; ok && t.used do continue;
             }
             
             print_node(p, sym.decl, 0, true, false);
@@ -685,7 +687,7 @@ print_type :: proc(using p: ^Printer, node: ^Node, indent: int)
         case ast.Ident:         print_ident(p, node, indent, 0, .Type, true);
         case ast.Numeric_Type:  
         print_indent(p, indent);
-        if len(v.name) > 3 do pprintf(p, "_c.%s", v.name);
+        if len(v.name) > 3 || v.name == "int" do pprintf(p, "_c.%s", v.name);
         else do               pprintf(p, "%s",    v.name);
         
         case ast.Pointer_Type:

@@ -91,10 +91,12 @@ advance_expr :: proc(expr: ^^Token)
     }
 }
 
+/*
 TRUE_STR := "1";
 FALSE_STR := "0";
 CONSTANT_ZERO := Expr_Constant{{4, 10, 1, false, false, u64(0)}};
 CONSTANT_ONE  := Expr_Constant{{4, 10, 1, false, false, u64(1)}};
+*/
 prep_expr :: proc(pp: ^Preprocessor, expr: ^^Token)
 {
     head: Token;
@@ -278,7 +280,7 @@ eval_expression :: proc(pp: ^Preprocessor, expr: ^Expr) -> u64
 
 parse_expression :: proc(pp: ^Preprocessor, expr: ^^Token) -> ^Expr
 {
-    prep_expr(pp, expr);
+    // prep_expr(pp, expr);
     ret := _parse_expression(pp, expr);
     if ret == nil do return make_expr(CONSTANT_ZERO);
     return ret;
@@ -367,7 +369,7 @@ parse_operand :: proc(pp: ^Preprocessor, expr: ^^Token) -> ^Expr
         expression^ = paren_expr; // @note(Tyler): Compiler bug workaround?
         if (expr^).kind != .CloseParen
         {
-            lex.error(expr^, "Expected ')', got %q", (expr^).text);
+            lex.error(expr^, "Expected ')', got %q, %q, %d", (expr^).text, (expr^).next.text, uintptr(raw_data((expr^).next.text))-uintptr(raw_data((expr^).text)));
         }
         advance_expr(expr);
         return expression;

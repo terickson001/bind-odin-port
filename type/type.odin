@@ -62,6 +62,7 @@ Type :: struct
     variant: union
     {
         Invalid,
+        Incomplete,
         Primitive,
         Named,
         Pointer,
@@ -74,7 +75,8 @@ Type :: struct
     },
 }
 
-Invalid :: struct{};
+Invalid :: struct {}
+Incomplete :: struct {}
 
 Primitive :: struct
 {
@@ -237,7 +239,7 @@ is_float :: proc(type: ^Type) -> bool
 hash_mix :: proc(a, b: u64) -> u64
 {
     data := transmute([16]u8)[2]u64{a, b};
-    return hash.crc64(data[:]);
+    return hash.crc64_xz(data[:]);
 }
 
 @private
@@ -253,11 +255,11 @@ hash_multi :: proc(args: []any) -> u64
             case rt.Type_Info_Slice: 
             slice := cast(^rt.Raw_Slice)a.data;
             bytes := mem.slice_ptr(cast(^byte)slice.data, slice.len * v.elem_size);
-            new_hash = hash.crc64(bytes);
+            new_hash = hash.crc64_xz(bytes);
             
             case:
             bytes := mem.slice_ptr(cast(^byte)a.data, ti.size);
-            new_hash = hash.crc64(bytes);
+            new_hash = hash.crc64_xz(bytes);
         }
         
         if i != 0 
@@ -294,6 +296,11 @@ make_type :: proc(variant: $T) -> ^Type
     type := new(Type);
     type.variant = variant;
     return type;
+}
+
+incomplete_type :: proc() -> ^Type
+{
+    return make_type(Incomplete{});
 }
 
 cached_ptr_types: map[u64]^Type;
@@ -380,6 +387,7 @@ base_type :: proc(type: ^Type) -> ^Type
         case Array: return v.base;
         
         case Invalid: return type;
+        case Incomplete: return type;
         case Primitive: return type;
         case Named: return type;
         case Func: return type;

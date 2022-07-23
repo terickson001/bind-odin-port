@@ -38,12 +38,14 @@ type_aliases := map[string]^type.Type \
     "uint32_t" = &type.type_u32,
     "uint64_t" = &type.type_u64,
     
-    "size_t"  = &type.type_size_t,
-    "ssize_t" = &type.type_ssize_t,
+    "size_t"    = &type.type_size_t,
+    "ssize_t"   = &type.type_ssize_t,
     "ptrdiff_t" = &type.type_ptrdiff_t,
     "uintptr_t" = &type.type_uintptr_t,
-    "intptr_t" = &type.type_intptr_t,
-    "wchar_t"  = &type.type_wchar_t,
+    "intptr_t"  = &type.type_intptr_t,
+    "wchar_t"   = &type.type_wchar_t,
+    
+	"_Bool"   = &type.type_u8,
 };
 
 install_builtins :: proc(using c: ^Checker)
@@ -58,7 +60,6 @@ install_builtins :: proc(using c: ^Checker)
         builtins[p.name] = symbol;
     }
     
-    
     for k, v in type_aliases
     {
         symbol := ast.make_symbol(k, nil);
@@ -67,7 +68,6 @@ install_builtins :: proc(using c: ^Checker)
         symbol.flags |= {.Builtin};
         builtins[k] = symbol;
     }
-    
     
     symbol := ast.make_symbol("va_list", nil);
     symbol.flags |= {.Builtin};
@@ -296,11 +296,10 @@ check_file :: proc(using c: ^Checker, file: ast.File)
     {
         loc := ast.node_location(decl);
         
-        
         switch v in decl.derived
         {
             case ast.Function_Decl, ast.Var_Decl: 
-            if decl.symbol != nil && !is_exported(decl.symbol) do continue;
+            // if decl.symbol != nil && !is_exported(decl.symbol) do continue;
             check_declaration(c, decl);
             
             // case ast.Var_Decl: check_declaration(c, decl);
@@ -317,6 +316,12 @@ check_file :: proc(using c: ^Checker, file: ast.File)
                 if config.global_config.root != "" && !strings.has_prefix(loc.filename, config.global_config.root) do do_check = false;
             }
             if do_check do check_declaration(c, decl);
+            
+            case ast.Enum_Type:
+            if config.global_config.root == "" || strings.has_prefix(loc.filename, config.global_config.root)
+            {
+                check_declaration(c, decl);
+            }
             
             case ast.Macro:
             loc := ast.node_location(v.name);
@@ -540,6 +545,9 @@ require_type :: proc(tok: ^Token, typ_: ^Type, flags: type.Primitive_Flags)
     {
         case type.Primitive:
         if flags & v.flags != {} do return;
+        
+        case type.Pointer:
+        if .Integer in flags do return;
     }
     
     lex.error(tok, "%q expects one of %v", tok.text, flags);
@@ -554,7 +562,8 @@ eval_unary_op :: proc(operator: ^Token, op: Operand) -> Operand
         case .Not:
         require_type(operator, op.type, {.Integer});
         if type.is_signed(op.type) do ret.val = i64(op.val.(i64) == 0 ? 1 : 0);
-        else                       do ret.val = u64(op.val.(u64) == 0 ? 1 : 0);
+        else                       do ret.val = i64(op.val.(u64) == 0 ? 1 : 0);
+        ret.type = &type.type_i32;
         
         case .Add:
         require_type(operator, op.type, {.Integer, .Float});
@@ -586,6 +595,7 @@ eval_unary_op :: proc(operator: ^Token, op: Operand) -> Operand
 
 promote_operand :: proc(op: ^Operand)
 {
+    if _, ok := op.val.(uintptr); ok do return;
     if type.is_integer(op.type) && op.type.size < 4
     {
         if type.is_unsigned(op.type)
@@ -609,130 +619,66 @@ balance_binary_operands :: proc(lhs, rhs: ^Operand)
     
     #partial switch lhs_t in lhs.type.variant
     {
+        case type.Pointer:
+        cast_operand(rhs, lhs.type);
+        
         case type.Primitive:
-        switch
+        #partial switch rhs_t in rhs.type.variant
         {
-            case type.is_signed(lhs.type):
-            if type.is_signed(rhs.type)
-            {
-                if rhs.type.size > lhs.type.size
-                {
-                    cast_operand(lhs, rhs.type);
-                    // lhs.type = rhs.type;
-                }
-                else
-                {
-                    cast_operand(rhs, lhs.type);
-                    // rhs.type = lhs.type;
-                }
-            }
-            else if type.is_unsigned(rhs.type)
-            {
-                if rhs.type.size >= lhs.type.size
-                {
-                    cast_operand(lhs, rhs.type);
-                    // lhs.type = rhs.type;
-                }
-                else
-                {
-                    if rhs.val.(u64) > (2<<u64(8*lhs.type.size))-1
-                    {
-                        cast_operand(lhs, rhs.type);
-                        // lhs.type = rhs.type;
-                    }
-                    else
-                    {
-                        cast_operand(rhs, lhs.type);
-                        // rhs.type = lhs.type;
-                    }
-                }
-            }
-            else
-            {
-                cast_operand(lhs, rhs.type);
-                /*
-                                v := lhs.val.(i64);
-                                lhs.val = f64(v);
-                                lhs.type = rhs.type;
-                */
-            }
+            case type.Pointer:
+            cast_operand(lhs, rhs.type);
             
-            case type.is_unsigned(lhs.type):
-            if type.is_unsigned(rhs.type)
+            case type.Primitive:
+            switch
             {
-                if rhs.type.size > lhs.type.size
+                case type.is_signed(lhs.type):
+                if type.is_signed(rhs.type)
                 {
-                    cast_operand(lhs, rhs.type);
-                    // lhs.type = rhs.type;
+                    if rhs.type.size > lhs.type.size do cast_operand(lhs, rhs.type);
+                    else                             do cast_operand(rhs, lhs.type);
                 }
-                else
+                else if type.is_unsigned(rhs.type)
                 {
-                    cast_operand(rhs, lhs.type);
-                    // rhs.type = lhs.type;
-                }
-            }
-            else if type.is_signed(rhs.type)
-            {
-                if lhs.type.size >= rhs.type.size
-                {
-                    cast_operand(rhs, lhs.type);
-                    // rhs.type = lhs.type;
-                }
-                else
-                {
-                    if lhs.val.(u64) > (2<<u64(8*rhs.type.size))-1
-                    {
-                        cast_operand(lhs, rhs.type);
-                        // lhs.type = lhs.type;
-                    }
-                    else
-                    {
-                        cast_operand(rhs, lhs.type);
-                        // rhs.type = lhs.type;
-                    }
-                }
-            }
-            else
-            {
-                cast_operand(lhs, rhs.type);
-                /*
-                                v := lhs.val.(u64);
-                                lhs.val = f64(v);
-                                lhs.type = rhs.type;
-                */
-            }
-            
-            case type.is_float(lhs.type):
-            if type.is_float(rhs.type)
-            {
-                if lhs.type.size > rhs.type.size
-                {
-                    cast_operand(rhs, lhs.type);
-                    // rhs.type = lhs.type;
+                    if rhs.type.size >= lhs.type.size                   do cast_operand(lhs, rhs.type);
+                    else if rhs.val.(u64) > (2<<u64(8*lhs.type.size))-1 do cast_operand(lhs, rhs.type);
+                    else                                                do cast_operand(rhs, lhs.type);
                 }
                 else
                 {
                     cast_operand(lhs, rhs.type);
-                    // lhs.type = rhs.type;
                 }
-            }
-            else if type.is_unsigned(rhs.type)
-            {
-                cast_operand(rhs, lhs.type);
-                /*
-                                v := rhs.val.(u64);
-                                rhs.val = f64(v);
-                                rhs.type = lhs.type;
-                */
-            }
-            else
-            {
-                cast_operand(rhs, lhs.type);
-                /*
-                                v := rhs.val.(i64);
-                                rhs.val = f64(v);
-                                rhs.type = lhs.type;
-                */
+                
+                case type.is_unsigned(lhs.type):
+                if type.is_unsigned(rhs.type)
+                {
+                    if rhs.type.size > lhs.type.size do cast_operand(lhs, rhs.type);
+                    else                             do cast_operand(rhs, lhs.type);
+                }
+                else if type.is_signed(rhs.type)
+                {
+                    if lhs.type.size >= rhs.type.size                   do cast_operand(rhs, lhs.type);
+                    else if lhs.val.(u64) > (2<<u64(8*rhs.type.size))-1 do cast_operand(lhs, rhs.type);
+                    else                                                do cast_operand(rhs, lhs.type);
+                }
+                else
+                {
+                    cast_operand(lhs, rhs.type);
+                }
+                
+                case type.is_float(lhs.type):
+                if type.is_float(rhs.type)
+                {
+                    if lhs.type.size > rhs.type.size do cast_operand(rhs, lhs.type);
+                    else                             do cast_operand(lhs, rhs.type);
+                }
+                else if type.is_unsigned(rhs.type)
+                {
+                    cast_operand(rhs, lhs.type);
+                }
+                else
+                {
+                    cast_operand(rhs, lhs.type);
+                }
             }
         }
     }
@@ -756,6 +702,7 @@ eval_binary_op :: proc(operator: ^Token, lhs, rhs: Operand) -> Operand
         if      type.is_float(lhs.type)  do ret.val = lhs.val.(f64) / rhs.val.(f64);
         else if type.is_signed(lhs.type) do ret.val = lhs.val.(i64) / rhs.val.(i64);
         else                             do ret.val = lhs.val.(u64) / rhs.val.(u64);
+        
         case .Mod:
         require_type(operator, lhs.type, {.Integer});
         if type.is_signed(lhs.type) do ret.val = lhs.val.(i64) % rhs.val.(i64);
@@ -800,40 +747,45 @@ eval_binary_op :: proc(operator: ^Token, lhs, rhs: Operand) -> Operand
         
         case .CmpEq:
         require_type(operator, lhs.type, {.Integer, .Float});
-        if      type.is_float(lhs.type)  do ret.val = u64(lhs.val.(f64) == rhs.val.(f64));
-        else if type.is_signed(lhs.type) do ret.val = u64(lhs.val.(i64) == rhs.val.(i64));
-        else                             do ret.val = u64(lhs.val.(u64) == rhs.val.(u64));
+        if      type.is_float(lhs.type)  do ret.val = i64(lhs.val.(f64) == rhs.val.(f64));
+        else if type.is_signed(lhs.type) do ret.val = i64(lhs.val.(i64) == rhs.val.(i64));
+        else                             do ret.val = i64(lhs.val.(u64) == rhs.val.(u64));
+        ret.type = &type.type_i32;
         
         case .NotEq:
         require_type(operator, lhs.type, {.Integer, .Float});
-        if      type.is_float(lhs.type)  do ret.val = u64(lhs.val.(f64) != rhs.val.(f64));
-        else if type.is_signed(lhs.type) do ret.val = u64(lhs.val.(i64) != rhs.val.(i64));
-        else                             do ret.val = u64(lhs.val.(u64) != rhs.val.(u64));
+        if      type.is_float(lhs.type)  do ret.val = i64(lhs.val.(f64) != rhs.val.(f64));
+        else if type.is_signed(lhs.type) do ret.val = i64(lhs.val.(i64) != rhs.val.(i64));
+        else                             do ret.val = i64(lhs.val.(u64) != rhs.val.(u64));
+        ret.type = &type.type_i32;
         
         case .Lt:
         require_type(operator, lhs.type, {.Integer, .Float});
-        if      type.is_float(lhs.type)  do ret.val = u64(lhs.val.(f64) < rhs.val.(f64));
-        else if type.is_signed(lhs.type) do ret.val = u64(lhs.val.(i64) < rhs.val.(i64));
-        else                             do ret.val = u64(lhs.val.(u64) < rhs.val.(u64));
+        if      type.is_float(lhs.type)  do ret.val = i64(lhs.val.(f64) < rhs.val.(f64));
+        else if type.is_signed(lhs.type) do ret.val = i64(lhs.val.(i64) < rhs.val.(i64));
+        else                             do ret.val = i64(lhs.val.(u64) < rhs.val.(u64));
+        ret.type = &type.type_i32;
         
         case .LtEq:
         require_type(operator, lhs.type, {.Integer, .Float});
-        if      type.is_float(lhs.type)  do ret.val = u64(lhs.val.(f64) <= rhs.val.(f64));
-        else if type.is_signed(lhs.type) do ret.val = u64(lhs.val.(i64) <= rhs.val.(i64));
-        else                             do ret.val = u64(lhs.val.(u64) <= rhs.val.(u64));
+        if      type.is_float(lhs.type)  do ret.val = i64(lhs.val.(f64) <= rhs.val.(f64));
+        else if type.is_signed(lhs.type) do ret.val = i64(lhs.val.(i64) <= rhs.val.(i64));
+        else                             do ret.val = i64(lhs.val.(u64) <= rhs.val.(u64));
+        ret.type = &type.type_i32;
         
         case .Gt:
         require_type(operator, lhs.type, {.Integer, .Float});
-        if      type.is_float(lhs.type)  do ret.val = u64(lhs.val.(f64) > rhs.val.(f64));
-        else if type.is_signed(lhs.type) do ret.val = u64(lhs.val.(i64) > rhs.val.(i64));
-        else                             do ret.val = u64(lhs.val.(u64) > rhs.val.(u64));
+        if      type.is_float(lhs.type)  do ret.val = i64(lhs.val.(f64) > rhs.val.(f64));
+        else if type.is_signed(lhs.type) do ret.val = i64(lhs.val.(i64) > rhs.val.(i64));
+        else                             do ret.val = i64(lhs.val.(u64) > rhs.val.(u64));
+        ret.type = &type.type_i32;
         
         case .GtEq:
         require_type(operator, lhs.type, {.Integer, .Float});
-        if      type.is_float(lhs.type)  do ret.val = u64(lhs.val.(f64) >= rhs.val.(f64));
-        else if type.is_signed(lhs.type) do ret.val = u64(lhs.val.(i64) >= rhs.val.(i64));
-        else                             do ret.val = u64(lhs.val.(u64) >= rhs.val.(u64));
-        
+        if      type.is_float(lhs.type)  do ret.val = i64(lhs.val.(f64) >= rhs.val.(f64));
+        else if type.is_signed(lhs.type) do ret.val = i64(lhs.val.(i64) >= rhs.val.(i64));
+        else                             do ret.val = i64(lhs.val.(u64) >= rhs.val.(u64));
+        ret.type = &type.type_i32;
     }
     return ret;
 }
@@ -841,8 +793,17 @@ eval_binary_op :: proc(operator: ^Token, lhs, rhs: Operand) -> Operand
 cast_operand :: proc(op: ^Operand, typ: ^Type)
 {
     if op.type == typ do return;
-    #partial switch op_t in op.type.variant
+    typ := type.base_type(typ);
+    #partial switch op_t in type.base_type(op.type).variant
     {
+        case type.Pointer:
+        #partial switch v in op.val
+        {
+            case i64: op.val = u64(v);
+            case u64: op.val = u64(v);
+            case: fmt.eprintf("Error: Invalid type conversion to pointer\n"); os.exit(1); 
+        }
+        
         case type.Primitive:
         switch
         {
@@ -917,6 +878,12 @@ check_expr :: proc(using c: ^Checker, expr: ^Node) -> Operand
             }
         }
         
+        if symbol.kind == .Type
+        {
+            op.const = true;
+            op.val = uintptr(symbol.type);
+        }
+        
         case ast.Paren_Expr:
         op = check_expr(c, v.expr);
         expr.type = v.expr.type;
@@ -972,6 +939,8 @@ check_expr :: proc(using c: ^Checker, expr: ^Node) -> Operand
         case ast.Struct_Type:   check_type(c, expr); op.type = expr.type; op.const = true;
         case ast.Union_Type:    check_type(c, expr); op.type = expr.type; op.const = true;
         case ast.Enum_Type:     check_type(c, expr); op.type = expr.type; op.const = true;
+        
+        case ast.Call_Expr: op.type = &type.type_invalid;
     }
     
     return op;
@@ -989,6 +958,7 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node)
         
         case ast.Ident:
         symbol := check_name(c, type_expr);
+		//fmt.println(v.token.text);
         assert(symbol != nil);
         assert(symbol.type != nil);
         type_expr.type = symbol.type;
@@ -1051,9 +1021,11 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node)
         if type_expr.symbol == nil && v.name != nil
         {
             name := fmt.aprintf("struct %s", ast.ident(v.name));
+            fmt.printf("STRUCT: %q\n", name);
             symbol, found := symbols[name];
             if found
             {
+                fmt.printf("  FOUND\n");
                 resolve_symbol(c, symbol);
                 assert(symbol.type != nil);
                 if symbol.type != nil
@@ -1065,6 +1037,7 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node)
             }
             else
             {
+                fmt.printf("  OPAQUE\n");
                 // Opaque struct
                 symbol = ast.make_symbol(name, type_expr);
                 type_expr.type = type.struct_type({});
@@ -1232,21 +1205,17 @@ lookup_symbol :: proc(using c: ^Checker, ident: ^Node) -> ^Symbol
         return symbol;
     }
     return nil;
-    /*
-        lex.error(ast.node_token(ident), "Symbol %q not found", name);
-        os.exit(1);
-    */
 }
 
 resolve_symbol :: proc(using c: ^Checker, symbol: ^Symbol)
 {
-    // fmt.printf("Resolving symbol: %q\n", symbol.name);
     symbol.used = true;
     if symbol.state == .Resolved do return;
     if symbol.state == .Resolving
     {
         if symbol.type != nil do return;
         fmt.eprintf("Cyclic dependency detected for symbol %q\n", symbol.name);
+        assert(false);
         os.exit(1);
     }
     symbol.state = .Resolving;

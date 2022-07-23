@@ -3,6 +3,16 @@ out/
 temp/
 *.exe
 *.obj
+*.pdb
 test/*
 !test/main.odin
 !test/find_vs.dll
+
+
+# Editors
+.idea
+.vs
+.vscode
+
+# OLS
+/ols.json

@@ -70,7 +70,7 @@ macro_blacklist :: proc(m: pp.Macro) -> bool
 {
     return m.params != nil || 
         path.file_name(m.name.filename) == "predef.h" ||
-        (config.global_config.root != "" && !strings.has_prefix(m.name.filename, config.global_config.root));
+    (config.global_config.root != "" && !strings.has_prefix(m.name.filename, config.global_config.root));
 }
 
 print_tokens :: proc(path: string, tokens: ^lex.Token)
@@ -95,6 +95,12 @@ print_tokens :: proc(path: string, tokens: ^lex.Token)
             if pos.whitespace > 0 do write_byte(&b, ' ');
         }
         write_string(&b, t.text);
+        
+        /*        
+                if t.text != "" do write_string(&b, t.text);
+                else do write_string(&b, fmt.tprintf("<.%v>", t.kind));
+        */
+        
     }
     
     str := to_string(b);

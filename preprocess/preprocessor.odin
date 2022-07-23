@@ -58,7 +58,6 @@ make_preprocessor :: proc() -> ^Preprocessor
 {
     pp := new(Preprocessor);
     
-    // pp.opt = opt;
     pp.include_dirs = make([]string, len(config.global_config.include_dirs) + len(lib.sys_info.include));
     copy(pp.include_dirs, config.global_config.include_dirs);
     copy(pp.include_dirs[len(config.global_config.include_dirs):], lib.sys_info.include);
@@ -128,7 +127,7 @@ preprocess :: proc(using pp: ^Preprocessor) -> (^Token, bool)
             continue;
         }
         
-        if tokens.kind == .__Pragma 
+        if tokens.kind == .__Pragma
         {
             _Pragma(pp);
             continue;
@@ -451,13 +450,82 @@ parse_line_with_continuations :: proc(using pp: ^Preprocessor) -> ^Token
     {
         if tokens.kind == .BackSlash
         {
+            prev_line := tokens.location.line; 
             tokens = tokens.next;
+            if tokens.line - prev_line > 1 do break;
+            if tokens != nil do tokens.first_on_line = false;
             continue;
         }
-        
         curr.next = tokens;
         curr = curr.next;
         tokens = tokens.next;
+        
+        if tokens == nil || tokens.first_on_line do break;
+    }
+    curr.next = nil;
+    
+    return line.next;
+}
+
+TRUE_STR := "1";
+FALSE_STR := "0";
+CONSTANT_ZERO := Expr_Constant{{4, 10, 1, false, false, u64(0)}};
+CONSTANT_ONE  := Expr_Constant{{4, 10, 1, false, false, u64(1)}};
+parse_expression_line_with_continuations :: proc(using pp: ^Preprocessor) -> ^Token
+{
+    
+    if tokens.first_on_line do return nil;
+    line: Token;
+    curr := &line;
+    
+    for tokens != nil
+    {
+        if try_expand_macro(pp) do continue;
+        if tokens.kind == .BackSlash
+        {
+            tokens = tokens.next;
+            if tokens != nil do tokens.first_on_line = false;
+            continue;
+        }
+        if tokens.text == "defined"
+        {
+            tokens = tokens.next;
+            paren: bool;
+            if tokens.kind == .OpenParen
+            {
+                tokens = tokens.next;
+                paren  = true;
+            }
+            name := tokens.text;
+            macro, found := pp.macros[name];
+            tok := new(Token);
+            tok.location = tokens.location;
+            tok.value.size = 4;
+            tok.value.base = 10;
+            tok.value.sig_figs = 1;
+            tok.value.val = u64(found);
+            tok.kind = .Integer;
+            tok.text = found ? TRUE_STR : FALSE_STR;
+            curr.next = tok;
+            curr = curr.next;
+            tokens = tokens.next;
+            
+            if paren
+            {
+                if tokens.kind != .CloseParen
+                {
+                    lex.error(curr, "Expected ')', got %q", tokens.text);
+                    os.exit(1);
+                }
+                tokens= tokens.next;
+            }
+        }
+        else
+        {
+            curr.next = tokens;
+            curr = curr.next;
+            tokens = tokens.next;
+        }
         
         if tokens == nil || tokens.first_on_line do break;
     }
@@ -547,7 +615,7 @@ directive_undef :: proc(using pp: ^Preprocessor)
 }
 
 /* Include Order
- *  
+ *
 *   #include <file>
 *    1. -I
 *    2. System Directories
@@ -558,6 +626,7 @@ directive_undef :: proc(using pp: ^Preprocessor)
 *    3. System Directories
 */
 
+INCLUDED: map[string]bool;
 directive_include :: proc(using pp: ^Preprocessor)
 {
     tokens = tokens.next; // include
@@ -575,7 +644,12 @@ directive_include :: proc(using pp: ^Preprocessor)
     
     if path in pragma_onces do return;
     
+    //if true do fmt.printf("INCLUDING: %q\n", filename);
+    INCLUDED[filename] = true;
+    
+    
     inc_tokens, inc_ok := lex.lex_file(path, list_allocator);
+    assert(inc_ok);
     if inc_tokens == nil do return; // Empty file?
     lex.token_list_set_include(inc_tokens, idx);
     
@@ -705,7 +779,17 @@ directive_ifdef :: proc(using pp: ^Preprocessor, invert := false)
 directive_if :: proc(using pp: ^Preprocessor)
 {
     tokens = tokens.next; // if
-    line := parse_line_with_continuations(pp);
+    line := parse_expression_line_with_continuations(pp);
+    assert(line != nil);
+    /*
+    tok := line;
+        for tok != nil
+        {
+            fmt.print(tok.text, " ");
+            tok = tok.next;
+        }
+    fmt.println();
+    */
     expr := parse_expression(pp, &line);
     res  := eval_expression(pp, expr);
     start_if(pp, res != 0);
@@ -714,7 +798,7 @@ directive_if :: proc(using pp: ^Preprocessor)
 directive_else :: proc(using pp: ^Preprocessor)
 {
     tokens = tokens.next; // else
-    if pp.conditionals.skip_else 
+    if pp.conditionals.skip_else
     {
         skip_conditional_block(pp, true);
     }
@@ -723,7 +807,8 @@ directive_else :: proc(using pp: ^Preprocessor)
 directive_elif :: proc(using pp: ^Preprocessor)
 {
     tokens = tokens.next; // elif
-    line := parse_line_with_continuations(pp);
+    line := parse_expression_line_with_continuations(pp);
+    assert(line != nil);
     if conditionals.skip_else
     {
         skip_conditional_block(pp, true);

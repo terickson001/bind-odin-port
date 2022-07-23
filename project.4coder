@@ -23,6 +23,7 @@ load_paths = {
 command_list = {
  { .name = "Run Debug",
    .out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
+   .cursor_at_end = true,
    .cmd = { {"odin run test -debug -out:test/bind", .os ="win"},
             {"odin run test -debug -out:test/bind", .os ="linux"},
             {"odin run test -debug -out:test/bind", .os ="mac"  }, }, },

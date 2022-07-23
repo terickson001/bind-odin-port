@@ -64,6 +64,16 @@ expect :: proc(using p: ^Parser, k: lex.Token_Kind, loc := #caller_location) -> 
     return t;
 }
 
+parse_static_assert :: proc(using p: ^Parser)
+{
+    advance(p); // static_assert
+    expect(p, .OpenParen);
+    parse_expression(p);
+    if allow(p, .Comma) != nil do parse_string(p);
+    expect(p, .CloseParen);
+    expect(p, .Semicolon);
+}
+
 parse_file :: proc(using p: ^Parser)
 {
     n: ^Node;
@@ -74,6 +84,10 @@ parse_file :: proc(using p: ^Parser)
             case .Semicolon: fallthrough; // Empty statement
             case .___extension__: 
             advance(p);
+            
+            continue;
+            case ._static_assert:
+            parse_static_assert(p);
             continue;
             
             case ._typedef:
@@ -854,9 +868,6 @@ parse_type_spec :: proc(using p: ^Parser, var_name: ^^Node, cc: ^^Token) -> ^Nod
     
     #partial switch tokens.kind
     {
-        case .___unaligned:
-        advance(p);
-        
         case .Mul:
         token = expect(p, .Mul);
         node = parse_type_spec(p, var_name, cc);
@@ -874,7 +885,7 @@ parse_type_spec :: proc(using p: ^Parser, var_name: ^^Node, cc: ^^Token) -> ^Nod
         ._static, ._extern, .___extension__,
         ._volatile, .___restrict,
         ._inline, .___inline, .___inline__, .___forceinline,
-        .__Noreturn:
+        .__Noreturn, .___unaligned:
         advance(p);
         return parse_type_spec(p, var_name, cc);
         
@@ -968,6 +979,7 @@ parse_type :: proc(using p: ^Parser, var_name: ^^Node, check_type_table := false
     
     return type;
 }
+
 parse_decl :: proc(using p: ^Parser, var_kind: ast.Var_Decl_Kind) -> ^Node
 {
     static    := false;
@@ -1004,7 +1016,7 @@ parse_decl :: proc(using p: ^Parser, var_kind: ast.Var_Decl_Kind) -> ^Node
             extension = true;
             advance(p);
             
-            case ._inline, .___inline, .___inline__, .___forceinline, .__Noreturn:
+            case ._inline, .___inline, .___inline__, .___forceinline, .__Noreturn, .___unaligned:
             advance(p);
             
             case: break loop;
@@ -1013,7 +1025,7 @@ parse_decl :: proc(using p: ^Parser, var_kind: ast.Var_Decl_Kind) -> ^Node
     
     name: ^Node;
     type := parse_type(p, &name);
-    
+    // assert(type != nil);
     if name == nil
     {
         sc := expect(p, .Semicolon);

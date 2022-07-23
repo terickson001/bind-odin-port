@@ -166,6 +166,7 @@ Token_Kind :: enum
     ___vectorcall,
     ___declspec,
     ___unaligned,
+    _static_assert,
     __Noreturn,
     
     __OPERATOR_BEGIN = Not,
@@ -297,5 +298,6 @@ TOKEN_STRINGS := [?]string{
     "__vectorcall",
     "__declspec",
     "__unaligned",
+    "static_assert",
     "_Noreturn",
 };

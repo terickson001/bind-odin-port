@@ -20,6 +20,8 @@ _get_symbols :: proc(filepath: string) -> (lib: Lib)
         return;
     }
     
+	fmt.printf("Reading library: %q\n", filepath);
+	
     lib = init_lib(filepath);
     dos_sig: [2]u8;
     os.read(file, dos_sig[:]);
@@ -163,7 +165,7 @@ read_archive_header :: proc(file: os.Handle) -> (header: Coff_Archive_Header, ok
     
     if string(header.END[:]) != "`\n"
     {
-        fmt.eprintf("ERROR: Invalid COFF archive member header\n");
+        fmt.eprintf("ERROR: Invalid COFF archive member header: %q\n", string(header.END[:]));
         return;
     }
     

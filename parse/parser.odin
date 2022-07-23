@@ -139,7 +139,7 @@ parse_string :: proc(using p: ^Parser) -> ^Node
 {
     using strings;
     
-    b := make_builder();
+    b := builder_make();
     write_byte(&b, '"');
     token := expect(p, .String);
     start := token;
@@ -153,7 +153,7 @@ parse_string :: proc(using p: ^Parser) -> ^Node
     token = lex.clone_token(start);
     token.next = start.next;
     token.text = clone(to_string(b));
-    destroy_builder(&b);
+    builder_destroy(&b);
     
     return ast.make(ast.String{{}, token});
 }

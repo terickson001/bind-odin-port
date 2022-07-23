@@ -26,7 +26,7 @@ get_predefined_macros :: proc(using pp: ^Preprocessor, info: lib.System_Info) ->
 {
     macro_names := strings.split(msvc_macros, "\n");
     
-    b := strings.make_builder();
+    b := strings.builder_make();
     {
         using strings;
         write_string(&b, macro_dump_prelude);
@@ -38,7 +38,7 @@ get_predefined_macros :: proc(using pp: ^Preprocessor, info: lib.System_Info) ->
     }
     path.create("temp/");
     os.write_entire_file("temp/msvc_macros_dump.c", transmute([]byte)(strings.to_string(b)));
-    strings.destroy_builder(&b);
+    strings.builder_destroy(&b);
     
     command_str :: "cmd /C \"cl /nologo temp\\msvc_macros_dump.c > temp\\predef.h 2>&1\"\x00";
     wcommand := windows.utf8_to_utf16(command_str);

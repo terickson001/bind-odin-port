@@ -176,7 +176,7 @@ change_case :: proc(str: string, casing: config.Case, preserve_trailing_undersco
         append(&words, last_word);
     }
     
-    b := strings.make_builder(context.temp_allocator);
+    b := strings.builder_make(context.temp_allocator);
     for _ in 0..<leading_underscores do strings.write_byte(&b, '_');
     for word, i in words
     {
@@ -247,7 +247,7 @@ remove_prefix :: proc(str: string, prefix: string) -> string
     {
         idx += len(prefix);
         for idx < len(str) && str[idx] == '_' do idx += 1; // Remove trailing underscores
-        b := strings.make_builder(context.temp_allocator);
+        b := strings.builder_make(context.temp_allocator);
         for _ in 0..<underscores do strings.write_byte(&b, '_');
         strings.write_string(&b, str[idx:]);
         return strings.to_string(b);
@@ -338,11 +338,11 @@ print_symbols :: proc(using p: ^Printer, filepath: string, syms: []^Symbol)
     fmt.printf("%s: %d Symbols\n", filepath, len(syms));
     path.create(filepath);
     
-    outb = strings.make_builder();
+    outb = strings.builder_make();
     defer 
     {
         os.write_entire_file(filepath, transmute([]byte)strings.to_string(outb));
-        strings.destroy_builder(&outb);
+        strings.builder_destroy(&outb);
     }
     
     slice.sort_by(syms, symbol_compare);

@@ -5,7 +5,7 @@ import "../print"
 
 main :: proc()
 {
-    when ODIN_OS == "windows"
+    when ODIN_OS == .Windows
     {
         config := bind.Config{
             // General

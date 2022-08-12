@@ -36,7 +36,8 @@ wchar_to_utf8 :: proc(wchar: ^c.wchar_t) -> string
         p += size_of(c.wchar_t);
     }
     wstring := mem.slice_ptr(wchar, length);
-    return windows.utf16_to_utf8(wstring, context.allocator);
+	ret, ok := windows.utf16_to_utf8(wstring, context.allocator);
+    return ret;
 }
 
 init_system_directories :: proc(allocator := context.allocator)

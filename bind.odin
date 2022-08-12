@@ -79,7 +79,7 @@ print_tokens :: proc(path: string, tokens: ^lex.Token)
     
     if tokens == nil do return;
     
-    b := make_builder();
+    b := builder_make();
     write_string(&b, tokens.text);
     for t := tokens.next; t != nil; t = t.next
     {

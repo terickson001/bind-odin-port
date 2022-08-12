@@ -153,7 +153,7 @@ parse_string :: proc(using p: ^Parser) -> ^Node
 {
     using strings;
     
-    b := make_builder();
+    b := builder_make();
     write_byte(&b, '"');
     token := expect(p, .String);
     start := token;
@@ -167,7 +167,7 @@ parse_string :: proc(using p: ^Parser) -> ^Node
     token = lex.clone_token(start);
     token.next = start.next;
     token.text = clone(to_string(b));
-    destroy_builder(&b);
+    builder_destroy(&b);
     
     return ast.make(ast.String{{}, token});
 }
@@ -180,7 +180,7 @@ op_precedence :: proc(op: ^Token) -> int
         case .Mul, .Quo, .Mod: return 13;
         case .Add, .Sub      : return 12;
         case .Shl, .Shr      : return 11;
-        case .Lt..(.GtEq)    : return 10;
+        case .Lt..=(.GtEq)    : return 10;
         case .CmpEq, .NotEq  : return 9;
         case .BitAnd         : return 8;
         case .Xor            : return 7;
@@ -188,7 +188,7 @@ op_precedence :: proc(op: ^Token) -> int
         case .And            : return 5;
         case .Or             : return 4;
         case .Question       : return 3;
-        case .Eq..(.ShrEq)   : return 2;
+        case .Eq..=(.ShrEq)   : return 2;
         // case .Comma         : return 1;
         case                 : return 0;
     }
@@ -941,7 +941,7 @@ parse_type :: proc(using p: ^Parser, var_name: ^^Node, check_type_table := false
         case ._enum:
         base_type = parse_enum(p);
         
-        case ._signed..(._double):
+        case ._signed..=(._double):
         base_type = parse_integer_or_float_type(p);
         
         case .Ident:

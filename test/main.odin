@@ -5,7 +5,7 @@ import "../print"
 
 main :: proc()
 {
-    when ODIN_OS == "windows"
+    when ODIN_OS == .Windows
     {
         
         /*
@@ -53,26 +53,52 @@ main :: proc()
 				*/
 		
 		
+		/*		
+				config := bind.Config{
+					// General
+					root = "E:\\Projects\\Odin\\bind\\test\\glslang",
+					files = []string{".\\Include\\glslang_c_interface.h"},
+					output = "out/",
+					
+					// Preprocess
+					include_dirs = []string{"E:\\Projects\\Odin\\bind\\test\\glslang\\Include"},
+					
+					// Bind
+					package_name = "glslang",
+					libraries = []string{"./test/glslangd.lib"},
+					
+					use_cstring = true,
+					use_odin_enum = false,
+					
+					var_prefix = "glslang",
+					proc_prefix = "glslang",
+					type_prefix = "glslang",
+					const_prefix = "GLSLANG",
+					
+					separate_output = true,
+				};
+				*/
+		
 		config := bind.Config{
 			// General
-			root = "E:\\Projects\\Odin\\bind\\test\\glslang",
-			files = []string{".\\Include\\glslang_c_interface.h"},
+			root = "E:\\Projects\\Odin\\bind\\test\\freetype",
+			files = []string{".\\bind.h"},
 			output = "out/",
 			
 			// Preprocess
-			include_dirs = []string{"E:\\Projects\\Odin\\bind\\test\\glslang\\Include"},
+			include_dirs = []string{"E:\\Projects\\Odin\\bind\\test\\freetype\\include"},
 			
 			// Bind
-			package_name = "glslang",
-			libraries = []string{"./test/glslangd.lib"},
+			package_name = "freetype",
+			libraries = []string{"E:\\Projects\\Odin\\bind\\test\\freetype\\lib\\freetype.lib"},
 			
 			use_cstring = true,
 			use_odin_enum = false,
 			
-			var_prefix = "glslang",
-			proc_prefix = "glslang",
-			type_prefix = "glslang",
-			const_prefix = "GLSLANG",
+			var_prefix = "FT_",
+			proc_prefix = "FT_",
+			type_prefix = "FT_",
+			const_prefix = "FT_",
 			
 			separate_output = true,
 		};

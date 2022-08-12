@@ -109,10 +109,10 @@ is_digit :: proc(c: byte, base := 10) -> bool
 {
     switch c
     {
-        case '0'..'1': return base >= 2;
-        case '2'..'7': return base >= 8;
-        case '8'..'9': return base >= 10;
-        case 'a'..'f', 'A'..'F':
+        case '0'..='1': return base >= 2;
+        case '2'..='7': return base >= 8;
+        case '8'..='9': return base >= 10;
+        case 'a'..='f', 'A'..='F':
         return base == 16;
         
         case: return false;
@@ -145,7 +145,7 @@ lex_number :: proc(using lexer: ^Lexer) -> (token: Token)
             case 'b': base = 2;  idx += 1;
             case 'x': base = 16; idx += 1;
             case 'o': base = 8;  idx += 1;
-            case '0'..'9': base = 8;
+            case '0'..='9': base = 8;
             case '.': break;
             case: idx -= 1;
         }
@@ -307,7 +307,7 @@ lex_char :: proc(using lexer: ^Lexer) -> (token: Token)
             idx += 1;
             switch data[idx]
             {
-                case '0'..'7':
+                case '0'..='7':
                 num_start := idx;
                 for is_digit(data[idx], 8) do idx += 1;
                 num_str := string(data[num_start:idx]);
@@ -490,21 +490,21 @@ lex_token :: proc(using lexer: ^Lexer) -> (token: Token, ok: bool)
         }
         fallthrough;
         
-        case 'a'..'z', 'A'..'Z', '_':
+        case 'a'..='z', 'A'..='Z', '_':
         idx += 1;
         token.kind = .Ident;
         for idx < len(data)
         {
             switch data[idx]
             {
-                case 'a'..'z', 'A'..'Z', '0'..'9', '_':
+                case 'a'..='z', 'A'..='Z', '0'..='9', '_':
                 idx += 1;
                 continue;
             }
             break;
         }
         token.text = string(data[start:idx]);
-        for k in (Token_Kind.__KEYWORD_BEGIN)..(Token_Kind.__KEYWORD_END)
+        for k in (Token_Kind.__KEYWORD_BEGIN)..=(Token_Kind.__KEYWORD_END)
         {
             name := enum_name(Token_Kind(k));
             if token.text == name[1:]
@@ -515,7 +515,7 @@ lex_token :: proc(using lexer: ^Lexer) -> (token: Token, ok: bool)
             
         }
         
-        case '0'..'9': token = lex_number(lexer);
+        case '0'..='9': token = lex_number(lexer);
         
         case '#': token = multi_tok(lexer, .Hash, .Paste);
         case '"': token = lex_string_tok(lexer);

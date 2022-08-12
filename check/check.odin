@@ -958,7 +958,7 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node)
         
         case ast.Ident:
         symbol := check_name(c, type_expr);
-		//fmt.println(v.token.text);
+		fmt.println(v.token.text);
         assert(symbol != nil);
         assert(symbol.type != nil);
         type_expr.type = symbol.type;

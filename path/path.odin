@@ -4,14 +4,14 @@ package path_util
 is_sep :: proc(c: byte) -> bool
 {
     result := c == '/';
-    when ODIN_OS == "windows" 
+    when ODIN_OS == .Windows
     {
         result ||= c == '\\';
     }
     return result;
 }
 
-when ODIN_OS == "windows" do SEP :: "\\";
+when ODIN_OS == .Windows do SEP :: "\\";
 else do SEP :: "/";
 
 dir :: proc(path: string) -> string

@@ -317,7 +317,7 @@ insert_macro_args :: proc(using pp: ^Preprocessor, body: ^Token, args: ^Macro_Ar
             tok = tok.next; // ##
             paste_next = true;
             
-            case .Ident, .__KEYWORD_BEGIN..(.__KEYWORD_END):
+            case .Ident, .__KEYWORD_BEGIN..=(.__KEYWORD_END):
             arg_tok := tok;
             arg := search_args(args, arg_tok);
             appendix: Token;
@@ -708,6 +708,9 @@ read_include_path :: proc(using pp: ^Preprocessor) -> (string, bool)
         end := tokens;
         tokens = tokens.next.next;
         filename = lex.token_run_string_unsafe(start, end);
+		
+		case .Ident:
+		if try_expand_macro(pp) do return read_include_path(pp);
     }
     
     return filename, local_first;

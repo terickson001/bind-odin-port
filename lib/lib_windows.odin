@@ -35,7 +35,8 @@ _get_symbols :: proc(filepath: string) -> (lib: Lib)
         get_coff_symbols_lib(file, &lib);
     }
     
-    return lib;
+	
+	return lib;
 }
 
 virt_to_phys :: proc(virt: u32, sections: []Coff_Section) -> u32

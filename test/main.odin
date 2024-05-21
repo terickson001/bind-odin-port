@@ -3,12 +3,11 @@ package main
 import bind ".."
 import "../print"
 
-main :: proc()
-{
-    when ODIN_OS == .Windows
-    {
-        
-        /*
+main :: proc() {
+	when ODIN_OS == .Windows 
+	{
+
+		/*
                 config := bind.Config{
                     // General
                     root = "C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.18362.0",
@@ -29,7 +28,7 @@ main :: proc()
                     
                 };
         */
-        
+
 		/*
 				config := bind.Config{
 					// General
@@ -51,8 +50,8 @@ main :: proc()
 					
 				};
 				*/
-		
-		
+
+
 		/*		
 				config := bind.Config{
 					// General
@@ -78,32 +77,32 @@ main :: proc()
 					separate_output = true,
 				};
 				*/
-		
-		config := bind.Config{
+
+		config := bind.Config {
 			// General
-			root = "E:\\Projects\\Odin\\bind\\test\\freetype",
-			files = []string{".\\bind.h"},
-			output = "out/",
-			
+			root               = ".\\test\\freetype",
+			files              = []string{".\\bind.h"},
+			output             = "out/",
+
 			// Preprocess
-			include_dirs = []string{"E:\\Projects\\Odin\\bind\\test\\freetype\\include"},
-			
+			include_dirs       = []string{".\\test\\freetype"},
+
 			// Bind
-			package_name = "freetype",
-			libraries = []string{"E:\\Projects\\Odin\\bind\\test\\freetype\\lib\\freetype.lib"},
-			
-			use_cstring = true,
-			use_odin_enum = false,
-			
-			var_prefix = "FT_",
-			proc_prefix = "FT_",
-			type_prefix = "FT_",
-			const_prefix = "FT_",
-			
-			separate_output = true,
-		};
-		
-		
+			package_name       = "freetype",
+			libraries          = []string{".\\test\\freetype\\lib\\freetype.dll"},
+			include_macros     = true,
+			use_cstring        = true,
+			use_odin_enum      = true,
+			prefix_ignore_case = true,
+			var_prefix         = "FT_",
+			proc_prefix        = "FT_",
+			type_prefix        = "FT_",
+			const_prefix       = "FT_",
+			separate_output    = false,
+			indent_width       = 4,
+		}
+
+
 		/*
 				config := bind.Config{
 					// General
@@ -129,12 +128,10 @@ main :: proc()
 					separate_output = true,
 				};
 		*/
-    }
-    else
-    {
-        
-        
-        /*
+	} else {
+
+
+		/*
                 config := bind.Config{
                     // General
                     root = "/usr/include/X11",
@@ -159,35 +156,34 @@ main :: proc()
                     var_case = .Snake,
                 };
         */
-        
-        
-        config := bind.Config{
-            root = "./test",
-            
-            // General
-            files = []string{"test.h"},
-            output = "out",
-            
-            // Preprocess
-            include_dirs = []string{},
-            
-            // Bind
-            package_name = "miniaudio",
-            libraries = []string{"./test/miniaudio.so"},
-            use_cstring = true,
-            separate_output = false,
-            
-            var_prefix   = "ma_",
-            type_prefix  = "ma_",
-            proc_prefix  = "ma_",
-            const_prefix = "ma_",
-            
-            //proc_case = .Snake,
-            //var_case = .Snake,
-        };
-        
-        
-        /*
+
+
+		config := bind.Config {
+			root            = "./test",
+
+			// General
+			files           = []string{"test.h"},
+			output          = "out",
+
+			// Preprocess
+			include_dirs    = []string{},
+
+			// Bind
+			package_name    = "miniaudio",
+			libraries       = []string{"./test/miniaudio.so"},
+			use_cstring     = true,
+			separate_output = false,
+			var_prefix      = "ma_",
+			type_prefix     = "ma_",
+			proc_prefix     = "ma_",
+			const_prefix    = "ma_",
+
+			//proc_case = .Snake,
+			//var_case = .Snake,
+		}
+
+
+		/*
                 config := bind.Config{
                     root = "/usr/include/curl",
     
@@ -213,8 +209,8 @@ main :: proc()
                     //var_case = .Snake,
                 };
         */
-        
-        /*
+
+		/*
                 config := bind.Config{
                     // General
                     root = "/usr/include/openssl",
@@ -236,9 +232,9 @@ main :: proc()
                     const_prefix = "SSL_",
                 };
         */
-        
-        
-        /*
+
+
+		/*
                 config := bind.Config{
                     // General
                     root = "./test/",
@@ -255,8 +251,8 @@ main :: proc()
                     separate_output = true,
                 };
                 */
-        
-        /*
+
+		/*
                 config := bind.Config{
                     // General
                     root = "/usr/include/SDL2",
@@ -281,9 +277,9 @@ main :: proc()
                     const_prefix = "SDL_",
                 };
         */
-        
-        
-        /*
+
+
+		/*
                 config := bind.Config{
                     // General
                     root = "/usr/include/SDL2",
@@ -306,8 +302,8 @@ main :: proc()
                     const_prefix = "SDLNet_",
                 };
         */
-        
-    }
-    
-    bind.generate(config);
+
+	}
+
+	bind.generate(config)
 }

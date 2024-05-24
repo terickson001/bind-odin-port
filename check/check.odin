@@ -18,13 +18,62 @@ Node :: ast.Node
 @(private)
 Symbol :: ast.Symbol
 @(private)
+Scope :: ast.Scope
+@(private)
 Type :: type.Type
+
 
 Checker :: struct {
 	builtins:          map[string]^Symbol,
-	symbols:           map[string]^Symbol,
+	root_scope:        ^Scope,
+	using curr_scope:  ^Scope,
 	reachable_symbols: [dynamic]^Symbol,
 	sym_id:            u64,
+}
+
+push_scope :: proc(c: ^Checker, owner: ^Symbol) -> ^Scope {
+	scope := new(Scope)
+	scope.parent = c.curr_scope
+	scope.next = c.curr_scope.child
+	scope.owner = owner
+	c.curr_scope.child = scope.next
+	c.curr_scope = scope
+	return scope
+}
+
+pop_scope :: proc(using c: ^Checker) -> ^Scope {
+	assert(curr_scope.parent != nil)
+	ret := curr_scope
+	curr_scope = curr_scope.parent
+	return ret
+}
+
+add_symbol :: proc(
+	using c: ^Checker,
+	name: string,
+	decl: ^Node,
+	kind: ast.Symbol_Kind,
+) -> ^Symbol {
+	symbol := ast.make_symbol(name, decl)
+	symbol.uid = sym_id
+	sym_id += 1
+	symbol.kind = kind
+	symbol.scope = curr_scope
+	curr_scope.symbols[name] = symbol
+	return symbol
+}
+
+flatten_scope_symbols :: proc(scope: ^Scope, syms: ^[dynamic]^Symbol) {
+	for _, v in scope.symbols do append(syms, v)
+	for child := scope.child; child != nil; child = child.next {
+		flatten_scope_symbols(child, syms)
+	}
+}
+
+flatten_symbols :: proc(using c: ^Checker) -> [dynamic]^Symbol {
+	syms := make([dynamic]^Symbol, sym_id)
+	flatten_scope_symbols(c.root_scope, &syms)
+	return syms
 }
 
 type_aliases := map[string]^type.Type {
@@ -84,33 +133,24 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node) {
 		{
 		case ast.Macro:
 			name := ast.ident(v.name)
-			if name not_in symbols {
-				symbol := ast.make_symbol(name, decl)
-				symbol.uid = sym_id
-				sym_id += 1
-				symbol.kind = .Const
-				// fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
-				symbols[name] = symbol
+			symbol := ast.get_symbol(c, name)
+			if symbol == nil {
+				add_symbol(c, name, decl, .Const)
 			} else {
-				decl.symbol = symbols[name]
+				decl.symbol = symbol
 				decl.symbol.decl = decl
 			}
 
 		case ast.Typedef:
 			for var := v.var_list; var != nil; var = var.next {
 				name := ast.var_ident(var)
-				if name not_in symbols {
-					symbol := ast.make_symbol(name, var)
-					symbol.uid = sym_id
-					sym_id += 1
-					symbol.kind = .Type
-					// fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid)
-					symbols[name] = symbol
+				symbol := ast.get_symbol(c, name)
+				if symbol == nil {
+					add_symbol(c, name, var, .Type)
 				} else {
-					var.symbol = symbols[name]
+					var.symbol = symbol
 					var.symbol.decl = var
 				}
-
 
 				name = ""
 				base_name := ""
@@ -132,21 +172,21 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node) {
 						base_name = ast.ident(r.name)
 						name = fmt.aprintf("enum %s", base_name)
 					}
+					for f := r.fields; f != nil; f = f.next {
+						name := ast.ident(f.derived.(ast.Enum_Field).name)
+						symbol := add_symbol(c, name, f, .Const)
+						symbol.type = &type.type_int
+					}
 				}
 
 				if name == "" {
 					// base.symbol = var.symbol
 					continue
 				}
-				if name not_in symbols {
-					symbol := ast.make_symbol(name, base)
-					symbol.uid = sym_id
-					sym_id += 1
-					symbol.kind = .Type
-					// fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid)
-					symbols[name] = symbol
+				symbol = ast.get_symbol(c, name)
+				if symbol == nil {
+					add_symbol(c, name, base, .Type)
 				} else {
-					symbol := symbols[name]
 					switch r in symbol.decl.derived 
 					{
 					case ast.Struct_Type:
@@ -155,7 +195,6 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node) {
 							to_tok := ast.node_token(base)
 							parent_tok := ast.node_token(var.derived.(ast.Var_Decl).type_expr)
 							symbol.decl = base
-							// fmt.printf("Reassigning symbol: %q(%d)\n", name, symbol.uid)
 						}
 					case ast.Union_Type:
 						if r.fields == nil && base.derived.(ast.Union_Type).fields != nil {
@@ -172,43 +211,31 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node) {
 
 		case ast.Var_Decl:
 			name := ast.var_ident(decl)
-			if name not_in symbols {
-				symbol := ast.make_symbol(name, decl)
-				symbol.uid = sym_id
-				sym_id += 1
-				symbol.kind = .Var
-				// fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
-				symbols[name] = symbol
+			symbol := ast.get_symbol(c, name)
+			if symbol == nil {
+				add_symbol(c, name, decl, .Var)
 			} else {
-				decl.symbol = symbols[name]
+				decl.symbol = symbol
 			}
 
 		case ast.Function_Decl:
 			name := ast.ident(v.name)
-			if name not_in symbols {
-				symbol := ast.make_symbol(name, decl)
-				symbol.uid = sym_id
-				sym_id += 1
-				symbol.kind = .Func
-				fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid)
-				symbols[name] = symbol
+			symbol := ast.get_symbol(c, name)
+			if symbol == nil {
+				add_symbol(c, name, decl, .Func)
 			} else {
-				decl.symbol = symbols[name]
+				decl.symbol = symbol
 			}
 
 		case ast.Struct_Type:
 			assert(v.name != nil)
 			// if v.name == nil do continue;
 			name := fmt.aprintf("struct %s", ast.ident(v.name))
-			if name not_in symbols {
-				symbol := ast.make_symbol(name, decl)
-				symbol.uid = sym_id
-				sym_id += 1
-				symbol.kind = .Type
-				// fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
-				symbols[name] = symbol
+			symbol := ast.get_symbol(c, name)
+			if symbol == nil {
+				add_symbol(c, name, decl, .Type)
 			} else {
-				decl.symbol = symbols[name]
+				decl.symbol = symbol
 				decl.symbol.decl = decl
 			}
 
@@ -216,15 +243,11 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node) {
 			assert(v.name != nil)
 			// if v.name == nil do continue;
 			name := fmt.aprintf("union %s", ast.ident(v.name))
-			if name not_in symbols {
-				symbol := ast.make_symbol(name, decl)
-				symbol.uid = sym_id
-				sym_id += 1
-				symbol.kind = .Type
-				// fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
-				symbols[name] = symbol
+			symbol := ast.get_symbol(c, name)
+			if symbol == nil {
+				add_symbol(c, name, decl, .Type)
 			} else {
-				decl.symbol = symbols[name]
+				decl.symbol = symbol
 				decl.symbol.decl = decl
 			}
 
@@ -232,16 +255,17 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node) {
 			name: string
 			if v.name == nil do name = fmt.aprintf("enum $%d", sym_id)
 			else do name = fmt.aprintf("enum %s", v.name)
-			if name not_in symbols {
-				symbol := ast.make_symbol(name, decl)
-				symbol.uid = sym_id
-				sym_id += 1
-				symbol.kind = .Type
-				// fmt.printf("Adding symbol: %q(%d)\n", name, symbol.uid);
-				symbols[name] = symbol
+			symbol := ast.get_symbol(c, name)
+			if symbol == nil {
+				add_symbol(c, name, decl, .Type)
 			} else {
-				decl.symbol = symbols[name]
+				decl.symbol = symbol
 				decl.symbol.decl = decl
+			}
+			for f := v.fields; f != nil; f = f.next {
+				name := ast.ident(f.derived.(ast.Enum_Field).name)
+				symbol := add_symbol(c, name, f, .Const)
+				symbol.type = &type.type_int
 			}
 		}
 	}
@@ -256,6 +280,8 @@ is_exported :: proc(sym: ^Symbol) -> bool {
 
 import "core:strings"
 check_file :: proc(using c: ^Checker, file: ast.File) {
+	root_scope = new(Scope)
+	curr_scope = root_scope
 	install_builtins(c)
 	install_symbols(c, file.decls)
 	for decl := file.decls; decl != nil; decl = decl.next {
@@ -305,7 +331,10 @@ check_file :: proc(using c: ^Checker, file: ast.File) {
 
 check_declaration :: proc(using c: ^Checker, decl: ^Node) {
 	assert(decl != nil)
-	if decl.symbol != nil do decl.symbol.used = true
+	if decl.symbol != nil {
+		append(&reachable_symbols, decl.symbol)
+		decl.symbol.used = true
+	}
 	switch &v in decl.derived 
 	{
 	case ast.Macro:
@@ -361,12 +390,14 @@ check_declaration :: proc(using c: ^Checker, decl: ^Node) {
 			)
 			var.symbol.type = var.type
 			var.symbol.used = true
+			append(&reachable_symbols, var.symbol)
 		}
 
 	case ast.Function_Decl:
 		// fmt.printf("FUNC: %s\n", decl.symbol.name)
 		check_type(c, v.type_expr)
 		assert(v.type_expr.type != nil)
+		v.type_expr.derived.(ast.Function_Type).scope.owner = decl.symbol
 		if v.type_expr.type == &type.type_invalid {
 			decl.symbol.used = false
 		}
@@ -377,14 +408,12 @@ check_declaration :: proc(using c: ^Checker, decl: ^Node) {
 		// fmt.printf("STRUCT: %s\n", decl.symbol.name)
 		decl.type = type.incomplete_type(decl)
 		// decl.symbol.used = true
-		// append(&reachable_symbols, decl.symbol)
 		decl.symbol.type = decl.type
 
 	case ast.Union_Type:
 		// fmt.printf("UNION: %s\n", decl.symbol.name)
 		decl.type = type.incomplete_type(decl)
 		// decl.symbol.used = true
-		// append(&reachable_symbols, decl.symbol)
 		decl.symbol.type = decl.type
 
 	case ast.Enum_Type:
@@ -920,9 +949,12 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node) {
 
 	case ast.Function_Type:
 		param_types: [dynamic]^Type
+		v.scope = push_scope(c, nil)
 		for p := v.params; p != nil; p = p.next {
+			symbol := add_symbol(c, ast.var_ident(p), p, .Var)
 			check_declaration(c, p)
 			finalize_type(c, p.type)
+			symbol.type = p.type
 			assert(p.type != nil)
 			if p.type == &type.type_invalid {
 				type_expr.type = &type.type_invalid
@@ -930,6 +962,7 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node) {
 			}
 			append(&param_types, p.type)
 		}
+		pop_scope(c)
 		ret_type: ^Type
 		if v.ret_type != nil {
 			check_type(c, v.ret_type)
@@ -943,57 +976,43 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node) {
 		if type_expr.symbol == nil {
 			if v.name != nil {
 				name := fmt.aprintf("struct %s", ast.ident(v.name))
-				symbol, found := symbols[name]
-				if found {
+				symbol := ast.get_symbol(c, name)
+				if symbol != nil {
 					resolve_symbol(c, symbol)
-					assert(symbol.type != nil)
 					type_expr.symbol = symbol
-					assert(type_expr.type == nil)
 					type_expr.type = symbol.type
 				} else {
 					// opaque struct 
-					symbol = ast.make_symbol(name, type_expr)
-					assert(type_expr.type == nil)
+					symbol = add_symbol(c, name, type_expr, .Type)
 					type_expr.type = type.incomplete_type(type_expr)
 					symbol.type = type_expr.type
-					// symbol.used = true
-					symbol.kind = .Type
-					symbol.uid = sym_id
-					sym_id += 1
-					symbols[name] = symbol
 				}
+				symbol.used = true
+				append(&reachable_symbols, symbol)
 			} else {
-				assert(type_expr.type == nil)
 				type_expr.type = type.incomplete_type(type_expr)
 			}
 		} else {
-			assert(type_expr.type == nil)
-			assert(type_expr.symbol.type == nil)
 			type_expr.type = type.incomplete_type(type_expr.symbol.decl)
 			type_expr.symbol.type = type_expr.type
-			// type_expr.symbol.used = true
+			append(&reachable_symbols, type_expr.symbol)
+			type_expr.symbol.used = true
 		}
 
 	case ast.Union_Type:
 		if type_expr.symbol == nil {
 			if v.name != nil {
 				name := fmt.aprintf("union %s", ast.ident(v.name))
-				symbol, found := symbols[name]
-				if found {
+				symbol := ast.get_symbol(c, name)
+				if symbol != nil {
 					resolve_symbol(c, symbol)
-					assert(symbol.type != nil)
 					type_expr.symbol = symbol
 					type_expr.type = symbol.type
 				} else {
-					// opaque union 
-					symbol = ast.make_symbol(name, type_expr)
+					// opaque struct 
+					symbol = add_symbol(c, name, type_expr, .Type)
 					type_expr.type = type.incomplete_type(type_expr)
 					symbol.type = type_expr.type
-					// symbol.used = true
-					symbol.kind = .Type
-					symbol.uid = sym_id
-					sym_id += 1
-					symbols[name] = symbol
 				}
 			} else {
 				type_expr.type = type.incomplete_type(type_expr)
@@ -1001,13 +1020,16 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node) {
 		} else {
 			type_expr.type = type.incomplete_type(type_expr.symbol.decl)
 			type_expr.symbol.type = type_expr.type
-			// type_expr.symbol.used = true
 		}
 
 	case ast.Enum_Type:
 		type_expr.type = &type.type_int
 		if type_expr.symbol != nil do type_expr.symbol.type = type_expr.type
 		idx := 0
+		// NOTE: C enums are exported to file scope
+		//       We'll add a scope later when renaming and unprefixing
+		//       to convert it to an Odin enum
+		// v.scope = push_scope(c, type_expr.symbol)
 		for f := v.fields; f != nil; f = f.next {
 			name := ast.ident(f.derived.(ast.Enum_Field).name)
 			if f.derived.(ast.Enum_Field).value != nil {
@@ -1016,15 +1038,13 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node) {
 				idx = int(value.val.(i64))
 			}
 
-			symbol := ast.make_symbol(name, f)
-			symbol.uid = sym_id
-			sym_id += 1
+			symbol := ast.get_symbol(c, name)
+			// fmt.printf("%s\n", name)
+			assert(symbol != nil)
 			f.type = &type.type_int
 			symbol.type = &type.type_int
-			symbol.kind = .Const
 			symbol.const_val = i64(idx)
 			idx += 1
-			symbols[name] = symbol
 		}
 	}
 }
@@ -1047,7 +1067,7 @@ lookup_symbol :: proc(using c: ^Checker, ident: ^Node) -> ^Symbol {
 	if symbol, ok = builtins[name]; ok {
 		return symbol
 	}
-	if symbol, ok = symbols[name]; ok {
+	if symbol = ast.get_symbol(c, name); symbol != nil {
 		return symbol
 	}
 	return nil
@@ -1087,11 +1107,15 @@ finalize_type :: proc(using checker: ^Checker, typ: ^type.Type) {
 			has_bitfield := false
 			only_bitfield := true
 			// if v.name != nil do fmt.printf("FINALIZE: %s\n", ast.ident(v.name))
+			v.scope = push_scope(checker, decl.symbol)
 			for f := v.fields; f != nil; f = f.next {
 				// fmt.printf("  Checking Field Decl\n")
+
+				symbol := add_symbol(checker, ast.var_ident(f), f, .Var)
 				check_declaration(checker, f)
 				finalize_type(checker, f.type)
 				assert(f.type != nil)
+				symbol.type = f.type
 				append(&field_types, f.type)
 				#partial switch _ in f.type.variant {
 				case type.Bitfield:
@@ -1100,10 +1124,12 @@ finalize_type :: proc(using checker: ^Checker, typ: ^type.Type) {
 					only_bitfield = false
 				}
 			}
+			pop_scope(checker)
 			only_bitfield = only_bitfield && has_bitfield
 			v.has_bitfield = has_bitfield
 			v.only_bitfield = only_bitfield
 
+			if decl.symbol != nil do decl.symbol.used = true
 			type.complete_struct_type(typ, field_types[:])
 			decl.type = typ
 			if decl.symbol != nil do decl.symbol.type = typ
@@ -1111,12 +1137,16 @@ finalize_type :: proc(using checker: ^Checker, typ: ^type.Type) {
 		// if v.name != nil do fmt.printf("  FINALIZED: %s\n", ast.ident(v.name))
 		case ast.Union_Type:
 			field_types: [dynamic]^Type
+			v.scope = push_scope(checker, decl.symbol)
 			for f := v.fields; f != nil; f = f.next {
+				symbol := add_symbol(checker, ast.var_ident(f), f, .Var)
 				check_declaration(checker, f)
 				finalize_type(checker, f.type)
+				symbol.type = f.type
 				assert(f.type != nil)
 				append(&field_types, f.type)
 			}
+			pop_scope(checker)
 			type.complete_union_type(typ, field_types[:])
 			decl.type = typ
 			if decl.symbol != nil do decl.symbol.type = typ
@@ -1130,7 +1160,7 @@ finalize_symbols :: proc(using c: ^Checker) {
 	finished := false
 	for !finished {
 		finished = true
-		for _, &sym in c.symbols {
+		for sym in reachable_symbols {
 			if !sym.used do continue
 			#partial switch v in sym.type.variant {
 			case type.Incomplete:
@@ -1140,7 +1170,4 @@ finalize_symbols :: proc(using c: ^Checker) {
 			}
 		}
 	}
-	// for &sym in reachable_symbols {
-	// 	finalize_type(c, sym.type)
-	// }
 }

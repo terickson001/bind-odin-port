@@ -51,14 +51,15 @@ generate :: proc(user_config: Config) {
 			if m != nil do ast.append(&parser.curr_decl, m)
 		}
 		parser.file.decls = parser.file.decls.next
-		type_table = parser.type_table
+		// type_table = parser.type_table
 
 		// Check
 		check.check_file(&checker, parser.file)
 	}
 
 	// Print
-	printer := print.make_printer(checker.symbols)
+	print.rename_symbols(checker.root_scope)
+	printer := print.make_printer(checker.root_scope)
 	print.print_file(&printer)
 	fmt.printf("Binding Completed Succesfully!\n")
 }
@@ -102,4 +103,3 @@ print_tokens :: proc(path: string, tokens: ^lex.Token) {
 	if path == "" do fmt.println(str)
 	else do os.write_entire_file(path, transmute([]u8)str)
 }
-

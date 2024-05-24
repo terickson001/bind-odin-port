@@ -576,9 +576,9 @@ parse_record :: proc(using p: ^Parser) -> ^Node {
 	#partial switch token.kind 
 	{
 	case ._struct:
-		return ast.make(ast.Struct_Type{{}, token, name, fields, false, false})
+		return ast.make(ast.Struct_Type{{}, token, name, fields, false, false, nil})
 	case ._union:
-		return ast.make(ast.Union_Type{{}, token, name, fields})
+		return ast.make(ast.Union_Type{{}, token, name, fields, nil})
 	}
 
 	return nil
@@ -638,7 +638,7 @@ parse_enum :: proc(using p: ^Parser) -> ^Node {
 		return nil
 	}
 
-	return ast.make(ast.Enum_Type{{}, token, name, fields})
+	return ast.make(ast.Enum_Type{{}, token, name, fields, nil})
 }
 
 parse_integer_or_float_type :: proc(using p: ^Parser) -> ^Node {
@@ -821,7 +821,7 @@ parse_postfix_type :: proc(using p: ^Parser, var_name: ^^Node, cc: ^^Token) -> ^
 
 		case .OpenParen:
 			params := parse_parameter_list(p)
-			_type_add_child(&type, ast.make(ast.Function_Type{{}, nil, params, nil}))
+			_type_add_child(&type, ast.make(ast.Function_Type{{}, nil, params, nil, nil}))
 
 		case .Colon:
 			expect(p, .Colon)
@@ -1090,4 +1090,3 @@ parse_decl :: proc(using p: ^Parser, var_kind: ast.Var_Decl_Kind) -> ^Node {
 
 	return vars.next
 }
-

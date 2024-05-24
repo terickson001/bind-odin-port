@@ -6,7 +6,29 @@ import "../print"
 main :: proc() {
 	when ODIN_OS == .Windows 
 	{
+		config := bind.Config {
+			// General
+			root               = ".\\test\\freetype",
+			files              = []string{".\\bind.h"},
+			output             = "out/",
 
+			// Preprocess
+			include_dirs       = []string{".\\test\\freetype"},
+
+			// Bind
+			package_name       = "freetype",
+			libraries          = []string{".\\test\\freetype\\lib\\freetype.dll"},
+			include_macros     = true,
+			use_cstring        = true,
+			use_odin_enum      = true,
+			prefix_ignore_case = true,
+			var_prefix         = "FT_",
+			proc_prefix        = "FT_",
+			type_prefix        = "FT_",
+			const_prefix       = "FT_",
+			separate_output    = false,
+			indent_width       = 4,
+		}
 		/*
                 config := bind.Config{
                     // General
@@ -77,30 +99,6 @@ main :: proc() {
 					separate_output = true,
 				};
 				*/
-
-		config := bind.Config {
-			// General
-			root               = ".\\test\\freetype",
-			files              = []string{".\\bind.h"},
-			output             = "out/",
-
-			// Preprocess
-			include_dirs       = []string{".\\test\\freetype"},
-
-			// Bind
-			package_name       = "freetype",
-			libraries          = []string{".\\test\\freetype\\lib\\freetype.dll"},
-			include_macros     = true,
-			use_cstring        = true,
-			use_odin_enum      = true,
-			prefix_ignore_case = true,
-			var_prefix         = "FT_",
-			proc_prefix        = "FT_",
-			type_prefix        = "FT_",
-			const_prefix       = "FT_",
-			separate_output    = false,
-			indent_width       = 4,
-		}
 
 
 		/*

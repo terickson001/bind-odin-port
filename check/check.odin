@@ -1030,21 +1030,47 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node) {
 		//       We'll add a scope later when renaming and unprefixing
 		//       to convert it to an Odin enum
 		// v.scope = push_scope(c, type_expr.symbol)
+		typ: ^Type
 		for f := v.fields; f != nil; f = f.next {
 			name := ast.ident(f.derived.(ast.Enum_Field).name)
 			if f.derived.(ast.Enum_Field).value != nil {
 				value := check_const_expr(c, f.derived.(ast.Enum_Field).value)
-				cast_operand(&value, &type.type_int)
-				idx = int(value.val.(i64))
+				if typ == nil {
+					if value.type.size == 4 && type.is_integer(value.type) do typ = value.type
+					else do cast_operand(&value, &type.type_int)
+				} else do cast_operand(&value, typ)
+				#partial switch i in value.val {
+				case i64:
+					idx = int(i)
+				case u64:
+					idx = int(i)
+				case:
+					unreachable()
+				}
 			}
 
 			symbol := ast.get_symbol(c, name)
-			// fmt.printf("%s\n", name)
 			assert(symbol != nil)
-			f.type = &type.type_int
-			symbol.type = &type.type_int
-			symbol.const_val = i64(idx)
+			f.type = typ != nil ? typ : &type.type_int
+			symbol.type = f.type
+			symbol.const_val = type.is_unsigned(symbol.type) ? u64(idx) : i64(idx)
 			idx += 1
+		}
+		if typ != nil {
+			for f := v.fields; f != nil; f = f.next {
+				f.type = typ
+				f.symbol.type = typ
+				#partial switch i in f.symbol.const_val {
+				case i64:
+					if type.is_unsigned(f.symbol.type) do f.symbol.const_val = u64(i)
+				case u64:
+					if type.is_signed(f.symbol.type) do f.symbol.const_val = i64(i)
+				case:
+					unreachable()
+				}
+			}
+			type_expr.type = typ
+			if type_expr.symbol != nil do type_expr.symbol.type = typ
 		}
 	}
 }

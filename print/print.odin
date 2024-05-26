@@ -28,7 +28,6 @@ Type :: type.Type
 Printer :: struct {
 	root_scope:        ^Scope,
 	using curr_scope:  ^Scope,
-	// rename_map:        map[string]string, // [Renamed]Original
 	out:               os.Handle,
 	outb:              strings.Builder,
 	proc_link_padding: int,
@@ -198,8 +197,12 @@ change_case :: proc(
 
 has_prefix :: proc(str, prefix: string, ignore_case: bool) -> bool {
 	if len(str) < len(prefix) do return false
-	for idx in 0 ..< len(prefix) {
-		if unicode.to_lower(cast(rune)prefix[idx]) != unicode.to_lower(cast(rune)str[idx]) do return false
+	if ignore_case {
+		for idx in 0 ..< len(prefix) {
+			if unicode.to_lower(cast(rune)prefix[idx]) != unicode.to_lower(cast(rune)str[idx]) do return false
+		}
+	} else {
+		return strings.has_prefix(str, prefix)
 	}
 	return true
 }
@@ -240,7 +243,11 @@ make_printer :: proc(scope: ^Scope) -> Printer {
 symbol_compare :: proc(i, j: ^Symbol) -> bool {
 	i_loc := ast.node_location(i.decl)
 	j_loc := ast.node_location(j.decl)
-	return i_loc.filename < j_loc.filename || i_loc.line < j_loc.line
+	strcmp := strings.compare(i_loc.filename, j_loc.filename)
+	lincmp := i_loc.line - j_loc.line
+	colcmp := i_loc.column - j_loc.column
+	res := strcmp < 0 || (strcmp == 0 && (lincmp < 0 || (lincmp == 0 && colcmp < 0)))
+	return res
 }
 
 group_symbols :: proc(using p: ^Printer) -> map[string][dynamic]^Symbol {
@@ -321,13 +328,13 @@ print_symbols :: proc(using p: ^Printer, filepath: string, syms: []^Symbol) {
 			{
 			case ast.Struct_Type:
 				if v.name == nil do break
-			// if t, found := symbols[ast.ident(v.name)]; found && t.used do continue
+				if t, found := symbols[ast.ident(v.name)]; found && t.used do continue
 			case ast.Union_Type:
 				if v.name == nil do break
-			// if t, found := symbols[ast.ident(v.name)]; found && t.used do continue
+				if t, found := symbols[ast.ident(v.name)]; found && t.used do continue
 			case ast.Enum_Type:
 				if v.name == nil do break
-			// if t, found := symbols[ast.ident(v.name)]; found && t.used do continue
+				if t, found := symbols[ast.ident(v.name)]; found && t.used do continue
 			}
 
 			print_node(p, sym.decl, 0, true, false)
@@ -415,101 +422,14 @@ print_indent :: proc(using p: ^Printer, indent: int) {
 }
 
 print_padding :: proc(using p: ^Printer, padding: int) {
-	rem := padding
+	rem := max(0, padding)
 	spaces := "          "
 	for ; rem >= 10; rem -= 10 do pprintf(p, spaces)
 	pprintf(p, spaces[:rem])
 }
 
-// try_rename :: proc(
-// 	using p: ^Printer,
-// 	str: string,
-// 	kind: ast.Symbol_Kind = nil,
-// 	check_collision := false,
-// ) -> (
-// 	string,
-// 	Rename_Result,
-// ) {
-// 	if renamed, found := specific_renames[str]; found {
-// 		return renamed, .Specific
-// 	}
-//
-// 	str := str
-// 	original_str := str
-//
-// 	prefix: string
-// 	casing: config.Case
-// 	#partial switch kind 
-// 	{
-// 	case .Var:
-// 		prefix = config.global_config.var_prefix
-// 		casing = config.global_config.var_case
-// 	case .Func:
-// 		prefix = config.global_config.proc_prefix
-// 		casing = config.global_config.proc_case
-// 	case .Const:
-// 		prefix = config.global_config.const_prefix
-// 		casing = config.global_config.const_case
-// 	case .Type:
-// 		prefix = config.global_config.type_prefix
-// 		casing = config.global_config.type_case
-// 	}
-//
-// 	result: Rename_Result
-// 	unprefixed := remove_prefix(str, prefix, config.global_config.prefix_ignore_case)
-// 	recased := change_case(unprefixed, casing)
-// 	if check_collision {
-// 		orig, found := rename_map[recased]
-// 		if found && orig != str {
-// 			if recased != unprefixed {
-// 				orig2, found := rename_map[unprefixed]
-// 				if found && orig2 != str {
-// 					fmt.eprintf(
-// 						"NOTE: Could not unprefix or recase %q due to name collision with %q\n",
-// 						str,
-// 						orig2,
-// 					)
-// 				} else {
-// 					fmt.eprintf(
-// 						"NOTE: Could not recase %q due to name collision with %q %v\n",
-// 						str,
-// 						orig,
-// 						orig == str,
-// 					)
-// 					str = unprefixed
-// 					result = unprefixed != original_str ? .Unprefixed : .None
-// 				}
-// 			} else {
-// 				fmt.eprintf(
-// 					"NOTE: Could not unprefix or recase %q due to name collision with %q\n",
-// 					str,
-// 					orig,
-// 				)
-// 			}
-// 		} else {
-// 			str = recased
-// 			result =
-// 				recased != unprefixed \
-// 				? .Recased \
-// 				: (unprefixed != original_str ? .Unprefixed : .None)
-// 		}
-// 		rename_map[strings.clone(str)] = original_str
-// 	} else {
-// 		str = recased
-// 		result =
-// 			recased != unprefixed ? .Recased : (unprefixed != original_str ? .Unprefixed : .None)
-// 	}
-// 	rename, renamed := reserved_words[str]
-// 	if renamed {
-// 		str = rename
-// 		result = .Reserved
-// 	}
-// 	return str, result
-// }
-//
 print_string :: proc(using p: ^Printer, str: string, indent: int, padding := 0) {
 	print_indent(p, indent)
-	// rename, _ := try_rename(p, str, kind, check_collision)
 	if padding != 0 {
 		pprintf(p, "%s", str)
 		print_padding(p, padding - len(str))
@@ -1002,14 +922,19 @@ print_record :: proc(
 	switch v in node.derived 
 	{
 	case ast.Struct_Type:
-		pprintf(p, "struct")
+		pprintf(p, "struct ")
 	case ast.Union_Type:
-		pprintf(p, "struct #raw_union")
+		pprintf(p, "struct #raw_union ")
 	case ast.Enum_Type:
-		pprintf(p, "enum")
+		pprintf(p, "enum ")
+		if node.symbol.type != &type.type_int {
+			pprintf(p, "_c.uint ")
+		} else {
+			pprintf(p, "_c.int ")
+		}
 	}
 
-	pprintf(p, " {{")
+	pprintf(p, "{{")
 	if is_enum && !config.global_config.use_odin_enum do pprintf(p, " */")
 	if fields != nil {
 		pprintf(p, "\n")
@@ -1124,23 +1049,12 @@ print_enum_fields :: proc(using p: ^Printer, node: ^Node, indent: int, prefix: s
 		for n := node; n != nil; n = n.next {
 			v := n.derived.(ast.Enum_Field)
 			if v.value != nil {
-				// name := ast.ident(v.name)
-				// renamed := change_case(
-				// 	remove_prefix(name, prefix, config.global_config.prefix_ignore_case),
-				// 	config.global_config.const_case,
-				// )
 				field_padding = max(field_padding, len(n.symbol.name))
 			}
 		}
 
 		for n := node; n != nil; n = n.next {
 			v := n.derived.(ast.Enum_Field)
-			// name := ast.ident(v.name)
-			// renamed := change_case(
-			// 	remove_prefix(name, prefix, config.global_config.prefix_ignore_case),
-			// 	config.global_config.const_case,
-			// )
-			//print_ident(p, v.name, 0, field_padding, .Const);
 			name := n.symbol.name
 			print_indent(p, 1)
 			if v.value != nil {
@@ -1188,9 +1102,13 @@ print_variable :: proc(
 			}
 
 		case ast.Struct_Type:
-			// r_name: string
-			// if t.name != nil do r_name = ast.ident(t.name)
-			if node.symbol == v.symbol &&
+			r_name: string
+			if t.name != nil do r_name = ast.ident(t.name)
+			if node.symbol != t.symbol && v.symbol.used {
+				print_name(p, v.type_expr, 0)
+				return
+			}
+			if node.symbol == t.symbol &&
 			   t.fields == nil &&
 			   v.type_expr.symbol != nil &&
 			   v.type_expr.symbol.decl.derived.(ast.Struct_Type).fields == nil {

@@ -109,6 +109,63 @@ rename_symbols :: proc(root_scope: ^Scope) {
 			fmt.printf("UNHANDLED: {}\n", sym.decl.derived)
 		}
 	}
+
+	rules: for rule in config.global_config.symbol_rules {
+		symbol: ^Symbol
+		scope := root_scope
+		path := rule.symbol_path
+		for name in strings.split_by_byte_iterator(&path, '.') {
+			if scope == nil do continue rules
+			found: bool
+			symbol, found = scope.symbols[name]
+			// fmt.printf("RULE: %s %v\n", name, found)
+			if !found do continue rules
+			switch v in symbol.decl.derived {
+			case ast.Struct_Type:
+				scope = v.scope
+			case ast.Union_Type:
+				scope = v.scope
+			case ast.Enum_Type:
+				scope = v.scope
+			case ast.Function_Decl:
+				scope = v.type_expr.derived.(ast.Function_Type).scope
+			case ast.Var_Decl:
+				#partial switch v.kind {
+				case .Typedef:
+					switch t in v.type_expr.derived {
+					case ast.Struct_Type:
+						scope = t.scope
+					case ast.Union_Type:
+						scope = t.scope
+					case ast.Enum_Type:
+						scope = t.scope
+					case:
+						scope = nil
+					}
+				case:
+					scope = nil
+				}
+			case:
+				scope = nil
+			}
+		}
+		assert(symbol != nil)
+		// fmt.printf("Rule matched symbol %q\n", symbol.name)
+		switch v in rule.variant {
+		case config.Rule_Set_Type:
+			target, found := root_scope.symbols[v.name]
+			if !found {
+				fmt.eprintf("WARNING: Could not find type %q for rule %q\n", v.name, path)
+				continue
+			}
+			symbol.type = target.type
+		case config.Rule_Set_Name:
+			symbol.name = v.name
+		case config.Rule_Exclude:
+		case config.Rule_Is_Flags:
+		}
+	}
+	delete(rename_map)
 }
 
 rename_fields :: proc(using r: ^Renamer, fields: ^Node) {
@@ -127,7 +184,12 @@ rename_enum_fields :: proc(using r: ^Renamer, enu_: ^Node) -> ^Scope {
 		if prefix == "" do enu_.symbol.name = fmt.aprintf("<ENUM%d>", enu_.symbol.uid)
 		else {
 			renamed, _ := _try_rename(r, prefix, .Type, true, false)
-			enu_.symbol.name = renamed
+			idx: int
+			for idx = len(renamed) - 1; idx >= 0; idx -= 1 {
+				if renamed[idx] != '_' do break
+			}
+
+			enu_.symbol.name = renamed[:idx + 1]
 		}
 	}
 
@@ -214,16 +276,7 @@ _common_enum_prefix :: proc(enu_: ^Node) -> string {
 		if screaming_name != screaming_prefix &&
 		   unprefixed_screaming_name != screaming_prefix &&
 		   unprefixed_screaming_name != unprefixed_screaming_prefix {
-			fmt.printf("Prefix %q discarded\n", prefix)
-			fmt.printf(
-				" %s != %s\n %s != %s\n %s != %s\n",
-				screaming_name,
-				screaming_prefix,
-				unprefixed_screaming_name,
-				screaming_prefix,
-				unprefixed_screaming_name,
-				unprefixed_screaming_prefix,
-			)
+			// fmt.printf("Prefix %q discarded\n", prefix)
 			prefix = ""
 		}
 	}
@@ -231,7 +284,6 @@ _common_enum_prefix :: proc(enu_: ^Node) -> string {
 }
 
 reserved_words := map[string]string {
-	// Reserverd Words
 	"align_of"    = "align_of_",
 	"defer"       = "defer_",
 	"import"      = "import_",

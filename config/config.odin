@@ -40,9 +40,31 @@ Config :: struct {
 	const_case:         Case,
 	separate_output:    bool,
 	indent_width:       int,
-
+	symbol_rules:       []Symbol_Rule,
 	// Populated at runtime
 	libs:               []lib.Lib,
+}
+
+Symbol_Rule :: struct {
+	symbol_path: string,
+	variant:     union {
+		Rule_Set_Name,
+		Rule_Exclude,
+		Rule_Is_Flags,
+		Rule_Set_Type,
+	},
+}
+
+Rule_Set_Name :: struct {
+	name: string,
+}
+
+Rule_Exclude :: struct {}
+
+Rule_Is_Flags :: struct {}
+
+Rule_Set_Type :: struct {
+	name: string,
 }
 
 global_config: Config

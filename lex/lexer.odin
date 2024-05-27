@@ -175,7 +175,7 @@ lex_number :: proc(using lexer: ^Lexer) -> (token: Token) {
 	loop: for idx < len(data) {
 		switch data[idx] 
 		{
-		case 'f':
+		case 'f', 'F':
 			f_suffix = true
 			token.kind = .Float
 			idx += 1
@@ -212,14 +212,27 @@ lex_number :: proc(using lexer: ^Lexer) -> (token: Token) {
 			case:
 				error(&token, "Invalid integer suffix")
 			}
-
+		case 'x', 'X', 'w', 'W':
+			token.kind = .Float
+			token.value.size = 10
+			idx += 1
+		case 'q', 'Q':
+			token.kind = .Float
+			token.value.size = 16
+			idx += 1
 		case 'e':
 			token.kind = .Float
 			idx += 1
-			if data[idx] == '-' do idx += 1
-			for '0' <= data[idx] && data[idx] <= '9' do idx += 1
+			if data[idx] == '-' || data[idx] == '+' do idx += 1
+			for is_digit(data[idx], 10) do idx += 1
 			num_str = string(data[num_start:idx])
 
+		case 'p':
+			token.kind = .Float
+			idx += 1
+			if data[idx] == '-' || data[idx] == '+' do idx += 1
+			for is_digit(data[idx], 16) do idx += 1
+			num_str = string(data[num_start:idx])
 		case:
 			break loop
 		}
@@ -241,9 +254,12 @@ lex_number :: proc(using lexer: ^Lexer) -> (token: Token) {
 	} else {
 		ok: bool
 		token.value.val, ok = strconv.parse_f64(num_str)
-		if !ok do error(&token, "Invalid float literal")
-		if f_suffix do token.value.size = 4
-		else do token.value.size = 8
+		if !ok do error(&token, "Invalid float literal %q", num_str)
+		if token.value.size != 0 {
+			if f_suffix do token.value.size = 4
+			else if longs > 0 do token.value.size = 10
+			else do token.value.size = 8
+		}
 	}
 
 	token.text = string(data[start:idx])
@@ -767,4 +783,3 @@ token_list_set_include :: proc(tokens: ^Token, idx: int) {
 		t.include_idx = idx
 	}
 }
-

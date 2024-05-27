@@ -1,6 +1,7 @@
 package print
 
 import "../ast"
+import "../check"
 import "../config"
 import "../type"
 import "core:fmt"
@@ -109,16 +110,22 @@ rename_symbols :: proc(root_scope: ^Scope) {
 			fmt.printf("UNHANDLED: {}\n", sym.decl.derived)
 		}
 	}
-
+	for k, v in specific_renames {
+		symbol, found := symbols[k]
+		if found do symbol.name = v
+	}
 	rules: for rule in config.global_config.symbol_rules {
 		symbol: ^Symbol
 		scope := root_scope
 		path := rule.symbol_path
 		for name in strings.split_by_byte_iterator(&path, '.') {
-			if scope == nil do continue rules
+			if scope == nil {
+				fmt.printf("RULE:  %q: Expected scope, got nil\n", name)
+				continue rules
+			}
 			found: bool
 			symbol, found = scope.symbols[name]
-			// fmt.printf("RULE: %s %v\n", name, found)
+			fmt.printf("RULE: %s %v\n", name, found)
 			if !found do continue rules
 			switch v in symbol.decl.derived {
 			case ast.Struct_Type:
@@ -150,7 +157,7 @@ rename_symbols :: proc(root_scope: ^Scope) {
 			}
 		}
 		assert(symbol != nil)
-		// fmt.printf("Rule matched symbol %q\n", symbol.name)
+		fmt.printf("Rule matched symbol %q\n", symbol.name)
 		switch v in rule.variant {
 		case config.Rule_Set_Type:
 			target, found := root_scope.symbols[v.name]
@@ -203,6 +210,8 @@ rename_enum_fields :: proc(using r: ^Renamer, enu_: ^Node) -> ^Scope {
 		scope.next = parent_scope.child
 		parent_scope.child = scope
 		scope.owner = enu_.symbol
+		enu_type := &enu_.derived.(ast.Enum_Type)
+		enu_type.scope = scope
 
 		fields := enu_.derived.(ast.Enum_Type).fields
 		if prefix == "" do prefix = config.global_config.const_prefix
@@ -214,7 +223,7 @@ rename_enum_fields :: proc(using r: ^Renamer, enu_: ^Node) -> ^Scope {
 			)
 			delete_key(&parent_scope.symbols, f.symbol.name)
 			f.symbol.name = renamed
-			scope.symbols[f.symbol.name] = f.symbol
+			scope.symbols[name] = f.symbol
 			f.symbol.scope = scope
 		}
 		return scope

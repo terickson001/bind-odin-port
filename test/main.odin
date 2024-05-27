@@ -128,8 +128,58 @@ main :: proc() {
 				};
 		*/
 	} else {
+		config := config.Config {
+			// General
+			root               = "./test/wayland/include",
+			files              = []string{"wayland-client.h", "wayland-client-protocol.h"},
+			output             = "out/",
 
+			// Preprocess
+			include_dirs       = []string{},
 
+			// Bind
+			package_name       = "wayland_client",
+			libraries          = []string{"libwayland-client.so"},
+			include_macros     = true,
+			use_cstring        = true,
+			use_odin_enum      = true,
+			prefix_ignore_case = true,
+			var_prefix         = "wl_",
+			proc_prefix        = "wl_",
+			type_prefix        = "WL_",
+			const_prefix       = "WL_",
+			separate_output    = false,
+			indent_width       = 4,
+			symbol_rules       = {
+				{"enum wl_output_transform.WL_OUTPUT_TRANSFORM_90", config.Rule_Set_Name{"_90"}},
+				{"enum wl_output_transform.WL_OUTPUT_TRANSFORM_180", config.Rule_Set_Name{"_180"}},
+				{"enum wl_output_transform.WL_OUTPUT_TRANSFORM_270", config.Rule_Set_Name{"_270"}},
+				{"wl_proxy_marshal_flags.proxy", config.Rule_Set_Name{"_proxy"}},
+				{"wl_proxy_marshal_array_flags.proxy", config.Rule_Set_Name{"_proxy"}},
+				{"wl_proxy_marshal_constructor.proxy", config.Rule_Set_Name{"_proxy"}},
+				{"wl_proxy_marshal_constructor_versioned.proxy", config.Rule_Set_Name{"_proxy"}},
+				{"wl_proxy_marshal_array_constructor.proxy", config.Rule_Set_Name{"_proxy"}},
+				{
+					"wl_proxy_marshal_array_constructor_versioned.proxy",
+					config.Rule_Set_Name{"_proxy"},
+				},
+				{"wl_proxy_destroy.proxy", config.Rule_Set_Name{"_proxy"}},
+				{"wl_proxy_get_listener.proxy", config.Rule_Set_Name{"_proxy"}},
+				{"wl_proxy_add_listener.proxy", config.Rule_Set_Name{"_proxy"}},
+				{"wl_proxy_add_dispatcher.proxy", config.Rule_Set_Name{"_proxy"}},
+				{"wl_proxy_set_user_data.proxy", config.Rule_Set_Name{"_proxy"}},
+				{"wl_proxy_get_user_data.proxy", config.Rule_Set_Name{"_proxy"}},
+				{"wl_proxy_get_version.proxy", config.Rule_Set_Name{"_proxy"}},
+				{"wl_proxy_get_id.proxy", config.Rule_Set_Name{"_proxy"}},
+				{"wl_proxy_get_tag.proxy", config.Rule_Set_Name{"_proxy"}},
+				{"wl_proxy_set_tag.proxy", config.Rule_Set_Name{"_proxy"}},
+				{"wl_proxy_get_class.proxy", config.Rule_Set_Name{"_proxy"}},
+				{"wl_proxy_set_queue.proxy", config.Rule_Set_Name{"_proxy"}},
+				{"wl_list_insert.list", config.Rule_Set_Name{"_list"}},
+				{"wl_list_insert_list.list", config.Rule_Set_Name{"_list"}},
+				{"wl_array_copy.array", config.Rule_Set_Name{"_array"}},
+			},
+		}
 		/*
                 config := bind.Config{
                     // General
@@ -157,29 +207,29 @@ main :: proc() {
         */
 
 
-		config := bind.Config {
-			root            = "./test",
-
-			// General
-			files           = []string{"test.h"},
-			output          = "out",
-
-			// Preprocess
-			include_dirs    = []string{},
-
-			// Bind
-			package_name    = "miniaudio",
-			libraries       = []string{"./test/miniaudio.so"},
-			use_cstring     = true,
-			separate_output = false,
-			var_prefix      = "ma_",
-			type_prefix     = "ma_",
-			proc_prefix     = "ma_",
-			const_prefix    = "ma_",
-
-			//proc_case = .Snake,
-			//var_case = .Snake,
-		}
+		// config := bind.Config {
+		// 	root            = "./test",
+		//
+		// 	// General
+		// 	files           = []string{"test.h"},
+		// 	output          = "out",
+		//
+		// 	// Preprocess
+		// 	include_dirs    = []string{},
+		//
+		// 	// Bind
+		// 	package_name    = "miniaudio",
+		// 	libraries       = []string{"./test/miniaudio.so"},
+		// 	use_cstring     = true,
+		// 	separate_output = false,
+		// 	var_prefix      = "ma_",
+		// 	type_prefix     = "ma_",
+		// 	proc_prefix     = "ma_",
+		// 	const_prefix    = "ma_",
+		//
+		// 	//proc_case = .Snake,
+		// 	//var_case = .Snake,
+		// }
 
 
 		/*

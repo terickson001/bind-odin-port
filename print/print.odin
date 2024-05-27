@@ -323,6 +323,7 @@ print_symbols :: proc(using p: ^Printer, filepath: string, syms: []^Symbol) {
 	for sym in syms {
 		if !sym.used do continue
 		if sym.kind == .Type {
+			if sym.type == &type.type_invalid do continue
 			// Check for duplicate typedef
 			switch v in sym.decl.derived 
 			{
@@ -346,7 +347,7 @@ print_symbols :: proc(using p: ^Printer, filepath: string, syms: []^Symbol) {
 		has_vars := false
 		has_procs := false
 		for sym in syms {
-			if sym.cname in l.symbols {
+			if sym.type != &type.type_invalid && sym.cname in l.symbols {
 				has_exports = true
 				if sym.kind == .Func do has_procs = true
 				else if sym.kind == .Var do has_vars = true
@@ -448,6 +449,7 @@ print_ident :: proc(
 }
 
 print_name :: proc(using p: ^Printer, node: ^Node, indent: int, padding := 0) {
+	// if _, ok := node.derived.(ast.Ident); ok do fmt.printf("IDENT: %q\n", ast.ident(node))
 	assert(node.symbol != nil)
 	name: string
 	if .Builtin in node.symbol.flags {
@@ -1080,6 +1082,7 @@ print_variable :: proc(
 	print_indent(p, indent)
 
 	v := node.derived.(ast.Var_Decl)
+	loc := ast.node_location(node)
 	#partial switch v.kind 
 	{
 	case .Typedef:

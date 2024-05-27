@@ -1,5 +1,6 @@
 package check
 
+import "base:intrinsics"
 import _c "core:c"
 import "core:fmt"
 import "core:mem"
@@ -254,7 +255,7 @@ install_symbols :: proc(using c: ^Checker, decls: ^Node) {
 		case ast.Enum_Type:
 			name: string
 			if v.name == nil do name = fmt.aprintf("enum $%d", sym_id)
-			else do name = fmt.aprintf("enum %s", v.name)
+			else do name = fmt.aprintf("enum %s", ast.ident(v.name))
 			symbol := ast.get_symbol(c, name)
 			if symbol == nil {
 				add_symbol(c, name, decl, .Type)
@@ -284,6 +285,7 @@ check_file :: proc(using c: ^Checker, file: ast.File) {
 	curr_scope = root_scope
 	install_builtins(c)
 	install_symbols(c, file.decls)
+	for k, v in builtins do symbols[k] = v
 	for decl := file.decls; decl != nil; decl = decl.next {
 		loc := ast.node_location(decl)
 
@@ -351,9 +353,14 @@ check_declaration :: proc(using c: ^Checker, decl: ^Node) {
 		} else {
 			name := ast.var_ident(decl)
 			// fmt.printf("Checking Var: %s\n", name)
+			// if name == "wl_log_func_t" do intrinsics.debug_trap()
 			check_type(c, v.type_expr)
+			if v.type_expr.type == &type.type_invalid {
+				decl.symbol.used = false
+			}
 			assert(v.type_expr.type != nil)
 			decl.type = v.type_expr.type
+			decl.symbol.type = v.type_expr.type
 			if v.kind == .Variable {
 				decl.symbol.type = decl.type
 			} else if v.kind == .Typedef {
@@ -384,12 +391,20 @@ check_declaration :: proc(using c: ^Checker, decl: ^Node) {
 			// fmt.printf("TYPEDEF: %s\n", ast.var_ident(var))
 			check_type(c, var.derived.(ast.Var_Decl).type_expr)
 			assert(var.derived.(ast.Var_Decl).type_expr.type != nil)
-			var.type = type.named_type(
-				ast.var_ident(var),
-				var.derived.(ast.Var_Decl).type_expr.type,
-			)
+			// if ast.var_ident(var) == "wl_log_func_t" do intrinsics.debug_trap()
+			if var.derived.(ast.Var_Decl).type_expr.type != &type.type_invalid {
+				var.type = type.named_type(
+					ast.var_ident(var),
+					var.derived.(ast.Var_Decl).type_expr.type,
+				)
+			} else {
+				var.type = &type.type_invalid
+			}
 			var.symbol.type = var.type
 			var.symbol.used = true
+			if var.symbol.type == &type.type_invalid {
+				var.symbol.used = false
+			}
 			append(&reachable_symbols, var.symbol)
 		}
 
@@ -921,7 +936,8 @@ check_type :: proc(using c: ^Checker, type_expr: ^Node) {
 	case ast.Pointer_Type:
 		check_type(c, v.type_expr)
 		assert(v.type_expr.type != nil)
-		type_expr.type = type.pointer_type(v.type_expr.type)
+		if v.type_expr.type == &type.type_invalid do type_expr.type = &type.type_invalid
+		else do type_expr.type = type.pointer_type(v.type_expr.type)
 
 	case ast.Array_Type:
 		check_type(c, v.type_expr)
